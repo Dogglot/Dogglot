@@ -124,7 +124,7 @@ function load(){
   try{ const d = JSON.parse(localStorage.getItem(KEY)); if(d && d.done){ d.stories = d.stories || {en:[],es:[]}; for(const l of ["en","es"]) d.done[l]=(d.done[l]||[]).map(Number); d.weak=d.weak||{en:[],es:[]}; d.dayCount=d.dayCount||{}; return d; } }catch(e){}
   return { xp:0, streak:0, last:"", lang:"en", mode:"path", done:{en:[],es:[]}, stories:{en:[],es:[]}, hearts:3, heartsDay:"", weak:{en:[],es:[]}, dayCount:{} };
 }
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} if(ME) syncProgress(); }
 function norm(s){ return String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/^to\s+/,"").replace(/[.!?,]/g,"").replace(/\s+/g," ").trim(); }
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 function say(t,v){ if(S.mute) return; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.lang=v; u.rate=.9; speechSynthesis.speak(u); }catch(e){} }
@@ -185,7 +185,7 @@ function toggleMute(){ S.mute=!S.mute; save(); render(); }
 function continueHTML(){ const d=S.done[S.lang]; let n=0; while(d.includes(n) && n<499) n++; return `<button class="go" style="margin:14px 0 0" onclick="start(${n})">Continuar: Lição ${n+1}</button>`; }
 function profileView(){
   const row=(l,v)=>`<div class="row" style="justify-content:space-between"><b>${l}</b><span>${v}</span></div>`;
-  return `<main><div style='text-align:center'>${dogSVG(S.avatar||"normal",110)}</div><h2 class="res" style="margin-top:4px">Seu progresso</h2>${avatarGrid()}${row("Lições de inglês",S.done.en.length)}${row("Lições de espanhol",S.done.es.length)}${row("Palavras aprendidas em inglês",learned("en").length)}${row("Palavras aprendidas em espanhol",learned("es").length)}${row("XP total",S.xp)}${row("Sequência",S.streak+" dia(s)")}</main>`;
+  return `<main><div style='text-align:center'>${dogSVG(S.avatar||"normal",110)}</div><h2 class="res" style="margin-top:4px">Seu progresso</h2>${avatarGrid()}${ME&&ME.role==="admin"?`<button class="go" style="margin-top:12px" onclick="ADMIN=null;setMode('admin')">Ver usuários</button>`:""}<button class="go" style="margin-top:12px;background:var(--card);color:var(--tx);box-shadow:0 6px 0 var(--line);border:2px solid var(--line)" onclick="logout()">Sair da conta</button>${row("Lições de inglês",S.done.en.length)}${row("Lições de espanhol",S.done.es.length)}${row("Palavras aprendidas em inglês",learned("en").length)}${row("Palavras aprendidas em espanhol",learned("es").length)}${row("XP total",S.xp)}${row("Sequência",S.streak+" dia(s)")}</main>`;
 }
 function setLvl(lang,k){ const key=lang==="en"?"lvEn":"lvEs"; S[key]=k; for(let i=0;i<k;i++) if(!S.done[lang].includes(i)) S.done[lang].push(i); save(); render(); }
 function skipSpeak(){ const C=CUR; if(!C||C.fb) return; C.spoken=null; C.micErr=false; C.order=[]; C.sel=null; C.i++; if(C.i>=C.q.length){ finish(); return; } save(); render(); }
@@ -440,7 +440,49 @@ function shell(){
   return `<header>${logoSVG(34)}${tabs}<div class="stats"><span>🔥 ${S.streak}</span><span>⚡ ${S.xp}</span><span>❤️ ${S.hearts}</span><button onclick="toggleMute()" aria-label="Som" style="font-size:18px">${S.mute?"🔇":"🔊"}</button></div><div class="modes">${modes}</div></header>`;
 }
 
+let ME=null, AUTH_READY=false, ADMIN=null, syncT=null;
+function defaultState(){ return {xp:0,streak:0,last:"",lang:"en",mode:"path",done:{en:[],es:[]},stories:{en:[],es:[]},hearts:3,heartsDay:"",weak:{en:[],es:[]},dayCount:{}}; }
+function syncProgress(){ clearTimeout(syncT); syncT=setTimeout(()=>{ fetch("/api/progress",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({progress:S})}).catch(()=>{}); },800); }
+async function loadMe(){
+  const r=await fetch("/api/me");
+  if(!r.ok){ ME=null; return false; }
+  const d=await r.json(); ME=d;
+  S=Object.assign(defaultState(), d.progress||{});
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
+  return true;
+}
+async function boot(){ try{ await loadMe(); }catch(e){ ME=null; } AUTH_READY=true; render(); }
+async function authSubmit(mode){
+  const name=document.getElementById("aName").value.trim(), email=document.getElementById("aEmail").value.trim(), password=document.getElementById("aPass").value;
+  const err=document.getElementById("aErr"); err.textContent="";
+  try{
+    const r=await fetch(mode==="signup"?"/api/signup":"/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(mode==="signup"?{name,email,password}:{email,password})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ err.textContent=d.error||"Não foi possível entrar."; return; }
+    await loadMe(); render();
+  }catch(e){ err.textContent="Sem conexão com o servidor. Tente de novo."; }
+}
+async function logout(){
+  try{ await fetch("/api/logout",{method:"POST"}); }catch(e){}
+  try{ localStorage.removeItem(KEY); }catch(e){}
+  location.reload();
+}
+function authView(){
+  return `<main style="padding-top:24px"><div style="text-align:center">${logoSVG(96)}</div><h2 class="res" style="text-align:center">Dogglot</h2><p class="intro" style="text-align:center">Entre ou crie sua conta para salvar seu progresso.</p><div class="card" style="text-align:left"><input id="aName" class="txt" placeholder="Nome (só para cadastro)" autocomplete="name"><input id="aEmail" class="txt" type="email" placeholder="E-mail" autocomplete="email"><input id="aPass" class="txt" type="password" placeholder="Senha (mínimo 6 caracteres)" autocomplete="current-password"><p id="aErr" style="color:var(--badt);font-weight:800;min-height:22px;margin:12px 0 0"></p><button class="go" onclick="authSubmit('login')">Entrar</button><button class="go" style="margin-top:10px;background:var(--card);color:var(--tx);box-shadow:0 6px 0 var(--line);border:2px solid var(--line)" onclick="authSubmit('signup')">Criar conta</button></div></main>`;
+}
+function adminView(){
+  if(!ADMIN){
+    fetch("/api/admin/users").then(r=>r.json()).then(d=>{ ADMIN=d; render(); }).catch(()=>{ ADMIN={error:"Sem conexão"}; render(); });
+    return `<main><p class="intro">Carregando usuários...</p></main>`;
+  }
+  if(!Array.isArray(ADMIN)) return `<main><p class="intro">${esc(ADMIN.error||"Sem permissão")}</p><button class="go" onclick="setMode('profile')">Voltar</button></main>`;
+  return `<main><h2 class="res" style="margin-top:12px">Usuários (${ADMIN.length})</h2><button class="go" style="margin:8px 0 14px" onclick="ADMIN=null;render()">Atualizar</button>${ADMIN.map(u=>`<div class="row" style="flex-direction:column;align-items:flex-start;gap:4px"><b>${esc(u.nome)}</b><small>${esc(u.email)} · ${esc(u.papel)} · corações: ${esc(u.coracoes)}</small><small>Próxima lição: inglês ${u.proxima_licao.ingles} · espanhol ${u.proxima_licao.espanhol}</small></div>`).join("")}</main>`;
+}
+boot();
 function render(){ refillHearts();
+  const app0=document.getElementById("app");
+  if(!AUTH_READY){ app0.innerHTML="<main><p class='intro'>Carregando...</p></main>"; return; }
+  if(!ME){ app0.innerHTML=authView(); return; }
   const app=document.getElementById("app");
   if(ST){ app.innerHTML=ST.out?outView():ST.asking?quesView():storyView(); return; }
   if(CUR){
@@ -452,7 +494,7 @@ function render(){ refillHearts();
   const m=S.mode||"path";
   const body = (S.goal===undefined||S.lvEs===undefined) ? onboardView() : m==="stories" ? `<main><p class="intro">Complete as frases com a palavra certa.</p>${storiesView()}</main>`
              : m==="chat" ? chatView()
-             : m==="profile" ? profileView() : m==="dict" ? dictView()
+             : m==="admin" ? adminView() : m==="profile" ? profileView() : m==="dict" ? dictView()
              : `<main>${path()}</main>`;
   app.innerHTML = shell() + body;
 }
