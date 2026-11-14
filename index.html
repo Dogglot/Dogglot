@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aprender Idiomas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fff8ec;--tx:#1e1b2e;--mut:#7a7388;--card:#ffffff;--line:#ebe3d2;--g:#2fb86e;--gd:#1f8a4c;--ok:#dcf7e6;--okt:#1f8a4c;--bad:#ffe1dc;--badt:#c8402a;--blue:#2b7de9}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1a1726;--tx:#f4f1ff;--mut:#a59fb8;--card:#24203a;--line:#3a3354;--ok:#183a29;--okt:#7fe0a8;--bad:#3e1f1c;--badt:#ff9a85}}
+:root[data-theme="dark"]{--bg:#1a1726;--tx:#f4f1ff;--mut:#a59fb8;--card:#24203a;--line:#3a3354;--ok:#183a29;--okt:#7fe0a8;--bad:#3e1f1c;--badt:#ff9a85}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--tx);font-family:"Nunito",system-ui,-apple-system,"Segoe UI",sans-serif;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:2px solid var(--line);flex-wrap:wrap}
+.tab{padding:8px 14px;border-radius:14px;font-weight:800;background:var(--card);border:2px solid var(--line)}
+.tab.on{background:var(--g);border-color:var(--gd);color:#fff}
+.stats{margin-left:auto;display:flex;gap:12px;font-weight:900}
+.modes{display:flex;gap:8px;width:100%;flex-wrap:wrap}
+main{max-width:520px;margin:0 auto;padding:8px 16px 48px}
+.unit{display:block;width:100%;text-align:left;margin:26px 0 6px;padding:14px 16px;border-radius:18px;background:var(--card);border:2px solid var(--line)}
+.unit h2{margin:0;font-size:18px;font-weight:900}
+.unit p{margin:4px 0 0;color:var(--mut);font-weight:700;font-size:14px}
+.unit.lock{opacity:.5;cursor:not-allowed}
+.path{display:flex;flex-direction:column;align-items:center;gap:16px;padding:12px 0}
+.node{width:70px;height:70px;border-radius:50%;background:var(--g);color:#fff;font-weight:900;font-size:21px;box-shadow:0 7px 0 var(--gd)}
+.node.done{background:#ffb800;box-shadow:0 7px 0 #d89a00}
+.node.lock{background:var(--line);box-shadow:0 7px 0 #cfc5b0;color:var(--mut);cursor:not-allowed}
+.node:not(.lock):active{transform:translateY(5px)!important;box-shadow:0 2px 0 var(--gd)}
+#lesson{max-width:520px;min-height:calc(100vh - 40px);margin:0 auto;padding:16px;display:flex;flex-direction:column}
+.center{text-align:center;justify-content:center;align-items:center}
+.top{display:flex;align-items:center;gap:14px}
+.x{font-size:24px;color:var(--mut);font-weight:900;padding:4px 6px}
+.bar{flex:1;height:16px;border-radius:10px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--g);border-radius:10px;transition:width .35s ease}
+.q{margin:26px 0 6px;font-size:24px;font-weight:900;line-height:1.3;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spk{width:44px;height:44px;border-radius:50%;background:var(--blue);color:#fff;font-size:20px;box-shadow:0 4px 0 #1f5fb8;flex:none}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}
+.opt{padding:16px 12px;border:2px solid var(--line);border-bottom-width:5px;border-radius:16px;background:var(--card);font-weight:800;font-size:16px;color:var(--tx)}
+.opt.sel{border-color:var(--blue);background:#e4f0ff;color:#1e1b2e}
+.txt{margin-top:22px;width:100%;padding:16px;font-size:20px;font-weight:800;border:2px solid var(--line);border-bottom-width:5px;border-radius:16px;background:var(--card);color:var(--tx)}
+.txt:focus{outline:none;border-color:var(--blue)}
+.foot{margin:auto -16px 0;padding:18px 16px 22px;border-top:2px solid var(--line)}
+.foot.ok{background:var(--ok)}
+.foot.bad{background:var(--bad)}
+.fb{font-weight:900;font-size:17px;margin-bottom:12px}
+.go{display:block;width:100%;max-width:520px;margin:0 auto;padding:16px;border-radius:16px;background:var(--g);color:#fff;font-weight:900;font-size:17px;box-shadow:0 6px 0 var(--gd)}
+.go:disabled{background:var(--line);box-shadow:0 6px 0 #cfc5b0;color:var(--mut);cursor:default}
+.card{margin-top:20px;padding:30px 18px;border-radius:20px;background:var(--card);border:2px solid var(--line);text-align:center}
+.card b{font-size:36px;display:block}
+.card span{color:var(--mut);font-weight:700;font-size:19px}
+.row{display:flex;align-items:center;gap:14px;padding:12px 14px;margin-bottom:10px;border:2px solid var(--line);border-radius:16px;background:var(--card)}
+.row small{color:var(--mut);font-weight:700;display:block}
+.intro{color:var(--mut);font-weight:700;margin:14px 0 4px}
+.big{font-size:64px}
+h2.res{font-size:28px;font-weight:900;margin:8px 0}
+input#search{width:100%;padding:12px 14px;border-radius:14px;border:2px solid var(--line);background:var(--card);color:var(--tx);margin:12px 0}
+.chat{display:flex;flex-direction:column;gap:10px;margin:12px 0;min-height:220px}
+.bub{max-width:85%;padding:12px 14px;border-radius:16px;font-weight:700;line-height:1.4;white-space:pre-wrap}
+.bub.user{align-self:flex-end;background:var(--g);color:#fff}
+.bub.assistant{align-self:flex-start;background:var(--card);border:2px solid var(--line)}
+.cbar{display:flex;gap:10px;align-items:center;position:sticky;bottom:0;background:var(--bg);padding:10px 0 14px}
+.cbar .txt{flex:1;margin:0}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const BANKS = {
+  en: { name: "Inglês", flag: "🇺🇸", voice: "en-US", p: [
+    ["hello","olá"],["goodbye","tchau"],["please","por favor"],["thank you","obrigado"],["yes","sim"],["no","não"],["water","água"],["food","comida"],["house","casa"],["dog","cachorro"],["cat","gato"],["book","livro"],["table","mesa"],["chair","cadeira"],["car","carro"],["city","cidade"],["school","escola"],["friend","amigo"],["mother","mãe"],["father","pai"],["brother","irmão"],["sister","irmã"],["red","vermelho"],["blue","azul"],["green","verde"],["white","branco"],["black","preto"],["one","um"],["two","dois"],["three","três"],["four","quatro"],["five","cinco"],["today","hoje"],["tomorrow","amanhã"],["yesterday","ontem"],["morning","manhã"],["night","noite"],["day","dia"],["week","semana"],["apple","maçã"],["bread","pão"],["milk","leite"],["coffee","café"],["rice","arroz"],["fish","peixe"],["I","eu"],["you","você"],["we","nós"],["they","eles"],["big","grande"],["small","pequeno"],["good","bom"],["bad","ruim"],["happy","feliz"],["sad","triste"],["hot","quente"],["cold","frio"],["to eat","comer"],["to drink","beber"],["to read","ler"],["to write","escrever"],["to go","ir"],["to see","ver"],["window","janela"],["door","porta"],["bed","cama"],["kitchen","cozinha"],["bathroom","banheiro"],["street","rua"],["park","parque"],["beach","praia"],["sea","mar"],["sun","sol"],["moon","lua"],["tree","árvore"],["flower","flor"],["rain","chuva"],["wind","vento"],["snow","neve"],["sky","céu"],["mountain","montanha"],["river","rio"],["bird","pássaro"],["horse","cavalo"],["cow","vaca"],["egg","ovo"],["cheese","queijo"],["juice","suco"],["beer","cerveja"],["soup","sopa"],["salad","salada"],["cake","bolo"],["sugar","açúcar"],["salt","sal"],["hand","mão"],["head","cabeça"],["eye","olho"],["mouth","boca"],["heart","coração"],["name","nome"],["phone","telefone"],["computer","computador"],["shoe","sapato"],["shirt","camisa"],["hat","chapéu"],["light","luz"],["question","pergunta"],["answer","resposta"],["letter","carta"],["job","trabalho"],["doctor","médico"],["teacher","professor"],["student","estudante"],["people","pessoas"],["child","criança"],["man","homem"],["woman","mulher"],["old","velho"],["new","novo"],["fast","rápido"],["slow","lento"],["easy","fácil"],["hard","difícil"],["always","sempre"],["never","nunca"],["here","aqui"],["there","lá"],["very","muito"],["now","agora"]
+  ]},
+  es: { name: "Espanhol", flag: "🇪🇸", voice: "es-ES", p: [
+    ["hola","olá"],["adiós","tchau"],["gracias","obrigado"],["sí","sim"],["no","não"],["buenos días","bom dia"],["buenas noches","boa noite"],["pan","pão"],["leche","leite"],["pescado","peixe"],["manzana","maçã"],["perro","cachorro"],["silla","cadeira"],["libro","livro"],["coche","carro"],["ciudad","cidade"],["escuela","escola"],["madre","mãe"],["padre","pai"],["hermano","irmão"],["hermana","irmã"],["rojo","vermelho"],["blanco","branco"],["negro","preto"],["uno","um"],["dos","dois"],["tres","três"],["cuatro","quatro"],["diez","dez"],["hoy","hoje"],["mañana","amanhã"],["ayer","ontem"],["noche","noite"],["día","dia"],["año","ano"],["yo","eu"],["tú","você"],["nosotros","nós"],["ellos","eles"],["pequeño","pequeno"],["bueno","bom"],["malo","mau"],["contento","contente"],["caliente","quente"],["frío","frio"],["leer","ler"],["escribir","escrever"],["hablar","falar"],["trabajar","trabalhar"],["estudiar","estudar"],["necesitar","precisar"],["querer","desejar"],["buscar","procurar"],["tiempo","tempo"],["hombre","homem"],["mujer","mulher"],["niño","menino"],["niña","menina"],["dinero","dinheiro"],["tienda","loja"],["ventana","janela"],["puerta","porta"],["cocina","cozinha"],["baño","banheiro"],["calle","rua"],["playa","praia"],["luna","lua"],["árbol","árvore"],["lluvia","chuva"],["viento","vento"],["nieve","neve"],["cielo","céu"],["montaña","montanha"],["río","rio"],["pájaro","pássaro"],["caballo","cavalo"],["huevo","ovo"],["queso","queijo"],["jugo","suco"],["cerveza","cerveja"],["ensalada","salada"],["pastel","bolo"],["azúcar","açúcar"],["mano","mão"],["cabeza","cabeça"],["ojo","olho"],["corazón","coração"],["nombre","nome"],["teléfono","telefone"],["computadora","computador"],["zapato","sapato"],["sombrero","chapéu"],["pregunta","pergunta"],["respuesta","resposta"],["trabajo","trabalho"],["doctor","médico"],["profesor","professor"],["estudiante","estudante"],["gente","pessoas"],["viejo","velho"],["nuevo","novo"],["lento","devagar"],["siempre","sempre"],["aquí","aqui"],["allí","lá"],["muy","muito"],["ahora","agora"]
+  ]}
+};
+const STORIES = {
+ en:[
+  {t:"No café",l:[["Hello! I would like a ___, please.","coffee",["coffee","dog","table"],"Olá! Eu gostaria de um café, por favor."],["Do you want bread or ___?","milk",["milk","book","car"],"Você quer pão ou leite?"],["Yes, ___ you.","thank",["thank","house","red"],"Sim, obrigado."],["Goodbye, my ___!","friend",["friend","water","green"],"Tchau, meu amigo!"]]},
+  {t:"Na escola",l:[["I ___ English at school.","study",["study","eat","drink"],"Eu estudo inglês na escola."],["She ___ a book.","reads",["reads","writes","sees"],"Ela lê um livro."],["We ___ together.","go",["go","eat","read"],"Nós vamos juntos."],["See you ___!","tomorrow",["tomorrow","coffee","cold"],"Até amanhã!"]]},
+  {t:"No aeroporto",l:[["I need a ___ to Lisbon.","ticket",["ticket","bread","chair"],"Eu preciso de uma passagem para Lisboa."],["Where is the ___?","bathroom",["bathroom","fish","city"],"Onde fica o banheiro?"],["My ___ is very big.","bag",["bag","good","small"],"Minha mala é muito grande."],["Have a good ___!","trip",["trip","dog","red"],"Tenha uma boa viagem!"]]},
+  {t:"Em casa",l:[["This is my ___.","house",["house","water","sad"],"Esta é a minha casa."],["The ___ is on the table.","book",["book","bread","morning"],"O livro está sobre a mesa."],["I ___ to sleep at night.","go",["go","drink","read"],"Eu vou dormir à noite."],["Good ___!","night",["night","coffee","milk"],"Boa noite!"]]},
+  {t:"Compras",l:[["How much is the ___?","apple",["apple","city","table"],"Quanto custa a maçã?"],["I want to ___ a book.","buy",["buy","see","drink"],"Eu quero comprar um livro."],["It is very ___ today.","hot",["hot","sad","four"],"Hoje está muito quente."],["Anything else? No, ___.","thanks",["thanks","school","red"],"Mais alguma coisa? Não, obrigado."]]},
+  {t:"No hotel",l:[["Hello, I have a ___.","room",["room","fish","red"],"Olá, eu tenho um quarto."],["Where is the ___?","elevator",["elevator","coffee","dog"],"Onde fica o elevador?"],["Breakfast is very ___.","good",["good","cold","sad"],"O café da manhã é muito bom."],["Have a ___ day!","nice",["nice","sad","dog"],"Tenha um dia legal!"]]},
+  {t:"No parque",l:[["I ___ a dog in the park.","see",["see","drink","read"],"Eu vejo um cachorro no parque."],["The dog is ___.","happy",["happy","water","week"],"O cachorro está feliz."],["We ___ to the park today.","go",["go","eat","write"],"Nós vamos ao parque hoje."],["Now we ___ together!","play",["play","milk","tomorrow"],"Agora brincamos juntos!"]]},
+  {t:"No restaurante",l:[["I want ___ and fish.","rice",["rice","bad","two"],"Eu quero arroz e peixe."],["Can I have a ___ of water?","glass",["glass","friend","hot"],"Posso ter um copo de água?"],["The food is very ___.","hot",["hot","sister","red"],"A comida está muito quente."],["The bill, ___.","please",["please","house","blue"],"A conta, por favor."]]},
+  {t:"No trabalho",l:[["I ___ every morning.","work",["work","drink","sad"],"Eu trabalho toda manhã."],["My ___ is a teacher.","mother",["mother","chair","white"],"Minha mãe é professora."],["She ___ at home.","writes",["writes","city","big"],"Ela escreve em casa."],["Good ___, boss!","morning",["morning","coffee","tomorrow"],"Bom dia, chefe!"]]},
+  {t:"No cinema",l:[["We ___ a movie tonight.","see",["see","eat","bad"],"Nós vemos um filme hoje à noite."],["The ___ is very cold.","water",["water","movie","happy"],"A água está muito fria."],["I ___ popcorn.","eat",["eat","go","buy"],"Eu como pipoca."],["The movie is ___!","good",["good","tomorrow","two"],"O filme é bom!"]]},
+  {t:"Na casa de um amigo",l:[["Hi, ___ friend!","my",["my","red","rice"],"Oi, meu amigo!"],["Come in, please. The ___ is open.","door",["door","book","sea"],"Entre, por favor. A porta está aberta."],["Would you like ___?","coffee",["coffee","dog","black"],"Você quer café?"],["Yes, ___!","thanks",["thanks","fish","tomorrow"],"Sim, obrigado!"]]},
+  {t:"No médico",l:[["I am not ___.","well",["well","water","two"],"Eu não estou bem."],["I have a ___.","headache",["headache","sad","milk"],"Eu estou com dor de cabeça."],["You need to ___ water.","drink",["drink","read","house"],"Você precisa beber água."],["Please, ___ and rest.","sleep",["sleep","eat","see"],"Por favor, durma e descanse."]]},
+  {t:"Na estação de trem",l:[["The train is ___ now.","late",["late","sad","dog"],"O trem está atrasado agora."],["Which ___ goes to Rio?","train",["train","coffee","two"],"Qual trem vai para o Rio?"],["I ___ my ticket.","have",["have","sea","drink"],"Eu tenho minha passagem."],["Thank you for your ___.","help",["help","red","milk"],"Obrigado pela sua ajuda."]]},
+  {t:"No fim de semana",l:[["On the ___, I rest at home.","weekend",["weekend","fish","blue"],"No fim de semana, eu descanso em casa."],["I ___ a book in the morning.","read",["read","write","drink"],"Eu leio um livro de manhã."],["It is ___ outside.","cold",["cold","tree","two"],"Está frio lá fora."],["See you on ___!","Monday",["Monday","water","red"],"Até segunda!"]]},
+  {t:"Viagem",l:[["We ___ a city in Brazil.","visit",["visit","bread","white"],"Nós visitamos uma cidade no Brasil."],["The ___ is beautiful.","beach",["beach","milk","sad"],"A praia é linda."],["I ___ to take photos.","like",["like","drink","city"],"Eu gosto de tirar fotos."],["Thank you for the ___.","trip",["trip","coffee","red"],"Obrigado pela viagem."]]}
+ ],
+ es:[
+  {t:"En la cafetería",l:[["___ días, quiero un café.","Buenos",["Buenos","Adiós","Pan"],"Bom dia, quero um café."],["¿Quieres pan o ___?","leche",["leche","perro","libro"],"Você quer pão ou leite?"],["Sí, muchas ___.","gracias",["gracias","tres","hoy"],"Sim, muito obrigado."],["¡Buenas ___!","tardes",["tardes","malo","rojo"],"Boa tarde!"]]},
+  {t:"En la escuela",l:[["Yo ___ español en la escuela.","estudio",["estudio","tienda","dinero"],"Eu estudo espanhol na escola."],["Ella ___ un libro.","lee",["lee","come","compra"],"Ela lê um livro."],["Nosotros ___ juntos.","estudiamos",["estudiamos","comemos","buscamos"],"Nós estudamos juntos."],["¡Hasta ___!","luego",["luego","malo","rojo"],"Até logo!"]]},
+  {t:"En el aeropuerto",l:[["Necesito un ___ a Madrid.","billete",["billete","pan","silla"],"Preciso de uma passagem para Madri."],["¿Dónde está el ___?","baño",["baño","pescado","ciudad"],"Onde fica o banheiro?"],["Mi ___ es muy grande.","maleta",["maleta","buena","pequeña"],"Minha mala é muito grande."],["¡Buen ___!","viaje",["viaje","perro","rojo"],"Boa viagem!"]]},
+  {t:"En casa",l:[["Esta es mi ___.","casa",["casa","agua","triste"],"Esta é a minha casa."],["El ___ está en la mesa.","libro",["libro","sol","té"],"O livro está sobre a mesa."],["Yo ___ a dormir por la noche.","voy",["voy","bebo","leo"],"Eu vou dormir à noite."],["¡Buenas ___!","noches",["noches","malo","tiempo"],"Boa noite!"]]},
+  {t:"De compras",l:[["¿Cuánto cuesta la ___?","manzana",["manzana","ciudad","mesa"],"Quanto custa a maçã?"],["Quiero ___ un libro.","comprar",["comprar","ver","beber"],"Eu quero comprar um livro."],["Hoy hace mucho ___.","calor",["calor","sueño","rojo"],"Hoje faz muito calor."],["¿Algo más? No, ___.","gracias",["gracias","pan","madre"],"Mais alguma coisa? Não, obrigado."]]},
+  {t:"En el hotel",l:[["Hola, tengo una ___.","habitación",["habitación","pescado","rojo"],"Olá, tenho um quarto."],["¿Dónde está el ___?","ascensor",["ascensor","café","perro"],"Onde fica o elevador?"],["El desayuno es muy ___.","bueno",["bueno","frío","triste"],"O café da manhã é muito bom."],["¡Que tenga un buen ___!","día",["día","perro","malo"],"Tenha um bom dia!"]]},
+  {t:"En el parque",l:[["Yo ___ un perro en el parque.","veo",["veo","bebo","leo"],"Eu vejo um cachorro no parque."],["El perro está ___.","contento",["contento","noche","tiempo"],"O cachorro está feliz."],["Nosotros ___ hoy.","vamos",["vamos","comemos","dinero"],"Nós vamos hoje."],["Ahora ___ juntos.","jugamos",["jugamos","pan","mujer"],"Agora brincamos juntos."]]},
+  {t:"En el restaurante",l:[["Quiero ___ y pescado.","arroz",["arroz","malo","dos"],"Eu quero arroz e peixe."],["¿Me das un ___ de agua?","vaso",["vaso","amigo","caliente"],"Você me dá um copo de água?"],["La comida está muy ___.","caliente",["caliente","hermana","rojo"],"A comida está muito quente."],["La cuenta, ___.","por favor",["por favor","casa","azul"],"A conta, por favor."]]},
+  {t:"En el trabajo",l:[["Yo ___ todas las mañanas.","trabajo",["trabajo","bebo","triste"],"Eu trabalho todas as manhãs."],["Mi ___ es profesora.","madre",["madre","silla","blanco"],"Minha mãe é professora."],["Ella ___ en casa.","escribe",["escribe","ciudad","grande"],"Ela escreve em casa."],["¡Buenos ___, jefe!","días",["días","café","mañana"],"Bom dia, chefe!"]]},
+  {t:"En el cine",l:[["Vemos una ___ esta noche.","película",["película","pan","rojo"],"Vemos um filme esta noite."],["El ___ está muy frío.","café",["café","película","contento"],"O café está muito frio."],["Yo ___ palomitas.","como",["como","voy","compro"],"Eu como pipoca."],["¡La película es ___!","buena",["buena","mañana","dos"],"O filme é bom!"]]},
+  {t:"En la casa de un amigo",l:[["¡Hola, ___ amigo!","mi",["mi","rojo","leche"],"Oi, meu amigo!"],["Pasa, por favor. La ___ está abierta.","puerta",["puerta","libro","mar"],"Entre, por favor. A porta está aberta."],["¿Quieres ___?","café",["café","perro","negro"],"Você quer café?"],["Sí, ___!","gracias",["gracias","pescado","mañana"],"Sim, obrigado!"]]},
+  {t:"En el médico",l:[["No me siento ___.","bien",["bien","agua","dos"],"Eu não me sinto bem."],["Tengo ___ de cabeza.","dolor",["dolor","blanco","tiempo"],"Estou com dor de cabeça."],["Tienes que ___ agua.","beber",["beber","leer","casa"],"Você precisa beber água."],["Por favor, ___ y descansa.","duerme",["duerme","come","ves"],"Por favor, durma e descanse."]]},
+  {t:"En la estación de tren",l:[["El tren está ___.","retrasado",["retrasado","triste","perro"],"O trem está atrasado."],["¿Qué ___ va a Río?","tren",["tren","café","tres"],"Qual trem vai para o Rio?"],["Yo ___ mi billete.","tengo",["tengo","veo","bebo"],"Eu tenho minha passagem."],["Gracias por tu ___.","ayuda",["ayuda","rojo","leche"],"Obrigado pela sua ajuda."]]},
+  {t:"El fin de semana",l:[["Los ___ descanso en casa.","fines de semana",["fines de semana","pescado","azul"],"Nos fins de semana descanso em casa."],["Leo un ___ por la mañana.","libro",["libro","coche","dinero"],"Eu leio um livro de manhã."],["Hace ___ afuera.","frío",["frío","hermano","dos"],"Está frio lá fora."],["¡Hasta el ___!","lunes",["lunes","agua","rojo"],"Até segunda!"]]},
+  {t:"De viaje",l:[["Visitamos una ___ en Brasil.","ciudad",["ciudad","pan","negro"],"Visitamos uma cidade no Brasil."],["La ___ es hermosa.","playa",["playa","leche","triste"],"A praia é linda."],["Me ___ tomar fotos.","gusta",["gusta","bebo","compro"],"Eu gosto de tirar fotos."],["Gracias por el ___.","viaje",["viaje","café","rojo"],"Obrigado pela viagem."]]}
+ ]
+};
+const THEMES = ["Saudações","Comida","Família","Cores e números","Tempo","Pessoas","Descrições","Verbos","Lugares","Revisão"];
+const KEY = "aprender-idiomas-v1";
+let S = load(), CUR = null, ST = null, CH = { lang:"en", msgs:[], busy:false };
+refillHearts();
+
+function load(){
+  try{ const d = JSON.parse(localStorage.getItem(KEY)); if(d && d.done){ d.stories = d.stories || {en:[],es:[]}; for(const l of ["en","es"]) d.done[l]=(d.done[l]||[]).map(Number); d.weak=d.weak||{en:[],es:[]}; d.dayCount=d.dayCount||{}; return d; } }catch(e){}
+  return { xp:0, streak:0, last:"", lang:"en", mode:"path", done:{en:[],es:[]}, stories:{en:[],es:[]}, hearts:3, heartsDay:"", weak:{en:[],es:[]}, dayCount:{} };
+}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+function norm(s){ return String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/^to\s+/,"").replace(/[.!?,]/g,"").replace(/\s+/g," ").trim(); }
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function say(t,v){ if(S.mute) return; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.lang=v; u.rate=.9; speechSynthesis.speak(u); }catch(e){} }
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function setMode(m){ S.mode=m; save(); render(); }
+function setLang(l){ S.lang=l; save(); render(); }
+function today(){ return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date()); }
+function refillHearts(){ const t=today(); if(S.heartsDay!==t){ S.hearts=3; S.heartsDay=t; save(); } }
+function outView(){ return `<div id="lesson" class="center"><div class="big">💔</div><h2 class="res">Sem corações por hoje</h2><p style="color:var(--mut);font-weight:700">Suas 3 vidas voltam à meia-noite, no horário de Brasília.</p><button class="go" style="margin-top:24px" onclick="quit()">Voltar</button></div>`; }
+window.onerror=function(){ return true; };
+const __errBox=function(m){ const a=document.getElementById("app"); if(a) a.insertAdjacentHTML("afterbegin", `<div style="background:#fee;color:#900;padding:10px;font-size:13px">Erro: ${esc(m)}</div>`); };
+function quit(){ CUR=null; ST=null; render(); }
+function reviewPairs(lang,n,W){
+  const ids=W.map(p=>p[0]), weak=((S.weak||{})[lang]||[]).filter(t=>!ids.includes(t)).slice(0,3).map(t=>BANKS[lang].p.find(p=>p[0]===t)).filter(Boolean);
+  if(weak.length) return weak;
+  return n>0 ? pairsOf(lang,n-1).slice(0,2) : [];
+}
+function storySents(lang){ return STORIES[lang].flatMap(s=>s.l.map(l=>[l[0].replace("___",l[1]), l[3]])); }
+function orderItems(lang,n){
+  const L=storySents(lang); if(!L.length) return [];
+  const [tg,pt]=L[(n*7)%L.length], words=tg.split(" ");
+  return [{mode:"order", pt, words, ans:words.join(" ")}];
+}
+function orderPick(i){ if(CUR && !CUR.fb){ CUR.order=(CUR.order||[]).concat(i); render(); } }
+function orderUndo(j){ if(CUR && !CUR.fb){ CUR.order=(CUR.order||[]).filter((_,k)=>k!==j); render(); } }
+function orderBody(ex,C){
+  const picked=C.order||[];
+  return `<div class="card" style="text-align:left"><small style="color:var(--blue);font-weight:900">Monte a frase</small><div style="font-size:18px;margin-top:6px">${esc(ex.pt)}</div></div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;min-height:56px;margin-top:18px;padding-bottom:12px;border-bottom:2px dashed var(--line)">${picked.map((i,j)=>`<button class="tab" ${C.fb?"disabled":""} onclick="orderUndo(${j})">${esc(ex.words[i])}</button>`).join("")}</div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">${ex.words.map((w,i)=>picked.includes(i)?"":`<button class="tab" ${C.fb?"disabled":""} onclick="orderPick(${i})">${esc(w)}</button>`).join("")}</div>`;
+}
+function sayStory(){ try{ speechSynthesis.cancel(); const b=BANKS[ST.lang]; STORIES[ST.lang][ST.s].l.forEach(l=>{ const u=new SpeechSynthesisUtterance(l[0].replace("___",l[1])); u.lang=b.voice; u.rate=.9; speechSynthesis.speak(u); }); }catch(e){} }
+function lockMsg(){ let t=document.getElementById("toast"); if(!t){ t=document.createElement("div"); t.id="toast"; t.style.cssText="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--card);border:2px solid var(--line);padding:12px 16px;border-radius:14px;font-weight:800;z-index:20"; document.body.appendChild(t); } t.textContent="Termine a lição anterior para desbloquear esta."; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>{ t.style.display="none"; },2200); }
+function dayStr(off){ return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date(Date.now()-off*864e5)); }
+function calHTML(){
+  const cells=[6,5,4,3,2,1,0].map(off=>{ const d=dayStr(off), on=((S.dayCount||{})[d]||0)>0; return `<div style="text-align:center;font-size:13px;font-weight:800;color:var(--mut)"><div style="width:34px;height:34px;border-radius:50%;margin:0 auto 4px;background:${on?"#ffb800":"var(--line)"};display:flex;align-items:center;justify-content:center;color:#fff">${on?"✓":""}</div>${d.slice(8)}</div>`; }).join("");
+  return `<div class="unit" style="margin-top:10px"><h2 style="font-size:16px">🔥 Sequência: ${S.streak} dia(s)</h2><div style="display:flex;justify-content:space-between;margin-top:10px">${cells}</div></div>`;
+}
+function goalHTML(){ const n=(S.dayCount||{})[today()]||0; return `<p class="intro" style="margin:18px 0 0">Meta de hoje: ${Math.min(n,S.goal)}/${S.goal} lição(ões)</p>`; }
+function onboardView(){ if(S.goal!==undefined) return levelView(); return `<main style="padding-top:40px"><h2 class="res">Quantas lições por dia?</h2><p class="intro">Você pode mudar isso depois. A meta aparece no caminho de lições.</p>${[1,3,5].map(g=>`<button class="unit" style="margin-top:12px" onclick="setGoal(${g})"><h2>${g} lição${g>1?"s":""} por dia</h2><p>${g===1?"Ritmo leve":g===3?"Ritmo recomendado":"Ritmo intenso"}</p></button>`).join("")}</main>`; }
+function setGoal(g){ S.goal=g; save(); render(); }
+function levelView(){ const L=S.lvEn===undefined?"en":"es", nm=L==="en"?"inglês":"espanhol"; return `<main style="padding-top:40px"><h2 class="res">Qual o seu nível em ${nm}?</h2><p class="intro">Isso marca as primeiras lições como concluídas, neste idioma.</p>${[[0,"Nunca estudei"],[20,"Já conheço o básico (unidades 1 e 2)"],[50,"Já sou intermediário (unidades 1 a 5)"]].map(([k,l])=>`<button class="unit" style="margin-top:12px" onclick="setLvl('${L}',${k})"><h2>${l}</h2></button>`).join("")}</main>`; }
+const DOG_BASE=`<ellipse cx='28' cy='50' rx='14' ry='26' fill='#8b5a2b' transform='rotate(18 28 50)'/><ellipse cx='92' cy='50' rx='14' ry='26' fill='#8b5a2b' transform='rotate(-18 92 50)'/><circle cx='60' cy='62' r='36' fill='#d9a066'/><ellipse cx='60' cy='80' rx='19' ry='14' fill='#f5e1c6'/><circle cx='46' cy='58' r='4.5' fill='#2b2233'/><circle cx='74' cy='58' r='4.5' fill='#2b2233'/><ellipse cx='60' cy='74' rx='6.5' ry='5' fill='#2b2233'/><path d='M53 86q7 6 14 0' fill='none' stroke='#2b2233' stroke-width='2.5' stroke-linecap='round'/>`;
+const OVER={
+ normal:"",
+ astronauta:`<circle cx='60' cy='62' r='50' fill='rgba(170,215,255,.25)' stroke='#b0bec5' stroke-width='6'/><path d='M30 40q30-16 60 0' fill='none' stroke='#fff' stroke-width='4' opacity='.7'/>`,
+ zumbi:`<circle cx='60' cy='62' r='36' fill='#7cb342' opacity='.5'/><path d='M38 52l12 12M50 52l-12 12M62 52l12 12M74 52l-12 12' stroke='#2b2233' stroke-width='3'/><path d='M50 92h20' stroke='#2b2233' stroke-width='2' stroke-dasharray='3 3'/>`,
+ princesa:`<path d='M36 34L42 12L52 26L60 8L68 26L78 12L84 34Z' fill='#ffc107' stroke='#f57f17' stroke-width='2'/><circle cx='60' cy='20' r='3' fill='#e91e63'/>`,
+ alienigena:`<circle cx='60' cy='62' r='36' fill='#8bc34a' opacity='.55'/><line x1='48' y1='28' x2='42' y2='8' stroke='#2b2233' stroke-width='2.5'/><line x1='72' y1='28' x2='78' y2='8' stroke='#2b2233' stroke-width='2.5'/><circle cx='42' cy='8' r='4' fill='#00e5ff'/><circle cx='78' cy='8' r='4' fill='#00e5ff'/><ellipse cx='46' cy='58' rx='7' ry='9' fill='#2b2233'/><ellipse cx='74' cy='58' rx='7' ry='9' fill='#2b2233'/>`,
+ estudante:`<circle cx='46' cy='58' r='9' fill='none' stroke='#37474f' stroke-width='2.5'/><circle cx='74' cy='58' r='9' fill='none' stroke='#37474f' stroke-width='2.5'/><line x1='55' y1='58' x2='65' y2='58' stroke='#37474f' stroke-width='2.5'/><polygon points='60,12 98,26 60,40 22,26' fill='#37474f'/><rect x='42' y='30' width='36' height='10' fill='#263238'/><line x1='90' y1='28' x2='90' y2='46' stroke='#ffc107' stroke-width='3'/>`
+};
+const AV=[["normal","Cachorro"],["astronauta","Astronauta"],["zumbi","Zumbi"],["princesa","Princesa"],["alienigena","Alienígena"],["estudante","Estudante"]];
+function dogSVG(id,size){ return `<svg viewBox='0 0 120 120' width='${size}' height='${size}' aria-hidden='true'>${DOG_BASE}${OVER[id]||""}</svg>`; }
+function logoSVG(size){ return dogSVG("estudante",size); }
+function setAvatar(id){ S.avatar=id; save(); render(); }
+function avatarGrid(){ const cur=S.avatar||"normal"; return `<div style='display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0'>${AV.map(([id,n])=>`<button class='row' style='flex-direction:column;justify-content:center;text-align:center;${cur===id?"border-color:var(--blue)":""}' onclick="setAvatar('${id}')">${dogSVG(id,64)}<small>${n}</small></button>`).join("")}</div>`; }
+function toggleMute(){ S.mute=!S.mute; save(); render(); }
+function continueHTML(){ const d=S.done[S.lang]; let n=0; while(d.includes(n) && n<499) n++; return `<button class="go" style="margin:14px 0 0" onclick="start(${n})">Continuar: Lição ${n+1}</button>`; }
+function profileView(){
+  const row=(l,v)=>`<div class="row" style="justify-content:space-between"><b>${l}</b><span>${v}</span></div>`;
+  return `<main><div style='text-align:center'>${dogSVG(S.avatar||"normal",110)}</div><h2 class="res" style="margin-top:4px">Seu progresso</h2>${avatarGrid()}${row("Lições de inglês",S.done.en.length)}${row("Lições de espanhol",S.done.es.length)}${row("Palavras aprendidas em inglês",learned("en").length)}${row("Palavras aprendidas em espanhol",learned("es").length)}${row("XP total",S.xp)}${row("Sequência",S.streak+" dia(s)")}</main>`;
+}
+function setLvl(lang,k){ const key=lang==="en"?"lvEn":"lvEs"; S[key]=k; for(let i=0;i<k;i++) if(!S.done[lang].includes(i)) S.done[lang].push(i); save(); render(); }
+function skipSpeak(){ const C=CUR; if(!C||C.fb) return; C.spoken=null; C.micErr=false; C.order=[]; C.sel=null; C.i++; if(C.i>=C.q.length){ finish(); return; } save(); render(); }
+function setLevel(k){ S.level=k; for(const l of ["en","es"]) for(let i=0;i<k;i++) if(!S.done[l].includes(i)) S.done[l].push(i); save(); render(); }
+const STORY_Q={
+ en:[{q:"O que a pessoa pede no café?",c:"Um café",w:["Um cachorro","Uma mesa"]},{q:"Quem lê um livro?",c:"Ela",w:["Eles","Eu"]},{q:"Para onde a pessoa vai?",c:"Lisboa",w:["Rio de Janeiro","Paris"]},{q:"Onde está o livro?",c:"Na mesa",w:["No carro","Na cadeira"]},{q:"Qual fruta a pessoa pergunta o preço?",c:"Maçã",w:["Pera","Uva"]},{q:"O que a pessoa procura no hotel?",c:"O elevador",w:["O café","O cachorro"]},{q:"O que a pessoa vê no parque?",c:"Um cachorro",w:["Um carro","Uma flor"]},{q:"O que a pessoa quer comer?",c:"Arroz e peixe",w:["Pão e leite","Bolo"]},{q:"Quem é professora?",c:"A mãe",w:["O chefe","A irmã"]},{q:"O que eles vão ver?",c:"Um filme",w:["Um jogo","Um show"]},{q:"O que o amigo oferece?",c:"Café",w:["Água","Pão"]},{q:"Qual é o problema da pessoa?",c:"Dor de cabeça",w:["Dor de barriga","Gripe"]},{q:"Qual é o problema com o trem?",c:"Está atrasado",w:["Está cheio","Está quebrado"]},{q:"Quando a pessoa descansa?",c:"No fim de semana",w:["Na segunda","No almoço"]},{q:"Para onde foi a viagem?",c:"Brasil",w:["Portugal","Estados Unidos"]}],
+ es:[{q:"O que a pessoa quer beber?",c:"Café",w:["Água","Suco"]},{q:"O que a pessoa estuda?",c:"Espanhol",w:["Inglês","Matemática"]},{q:"Para onde a pessoa vai?",c:"Madri",w:["Lisboa","Roma"]},{q:"Onde está o livro?",c:"Na mesa",w:["No carro","Na cadeira"]},{q:"Qual fruta a pessoa pergunta o preço?",c:"Maçã",w:["Pera","Uva"]},{q:"O que a pessoa procura no hotel?",c:"O elevador",w:["O café","O cachorro"]},{q:"O que a pessoa vê no parque?",c:"Um cachorro",w:["Um carro","Uma flor"]},{q:"O que a pessoa quer comer?",c:"Arroz e peixe",w:["Pão e leite","Bolo"]},{q:"Quem é professora?",c:"A mãe",w:["O chefe","A irmã"]},{q:"O que eles vão ver?",c:"Um filme",w:["Um jogo","Um show"]},{q:"O que o amigo oferece?",c:"Café",w:["Água","Pão"]},{q:"Qual é o problema da pessoa?",c:"Dor de cabeça",w:["Dor de barriga","Gripe"]},{q:"Qual é o problema com o trem?",c:"Está atrasado",w:["Está cheio","Está quebrado"]},{q:"Quando a pessoa descansa?",c:"No fim de semana",w:["Na segunda","No almoço"]},{q:"Para onde foi a viagem?",c:"Brasil",w:["Portugal","Estados Unidos"]}]
+};
+function quesView(){
+  const Q=STORY_Q[ST.lang][ST.s];
+  if(!ST.qOpts) ST.qOpts=shuffle([Q.c,...Q.w]);
+  const fb=ST.qFb;
+  return `<div id="lesson"><div class="top"><button class="x" aria-label="Sair" onclick="ST=null;render()">✕</button><div class="bar"><i style="width:100%"></i></div></div>
+  <p class="intro">Compreensão</p><div class="q" style="font-size:22px">${Q.q}</div>
+  <div class="opts">${ST.qOpts.map((o,i)=>`<button class="opt${ST.qSel===i?" sel":""}" ${fb?"disabled":""} onclick="qPick(${i})">${esc(o)}</button>`).join("")}</div>
+  <div class="foot ${fb==="ok"?"ok":fb==="bad"?"bad":""}">${fb==="ok"?`<div class="fb" style="color:var(--okt)">Isso mesmo! 🎉</div>`:fb==="bad"?`<div class="fb" style="color:var(--badt)">Resposta certa: ${esc(Q.c)}</div>`:""}<button class="go" ${!fb&&ST.qSel==null?"disabled":""} onclick="qAct()">${fb?"Concluir":"Verificar"}</button></div></div>`;
+}
+function qPick(i){ if(ST && !ST.qFb){ ST.qSel=i; render(); } }
+function qAct(){
+  if(ST.qFb){ const d=S.stories[ST.lang]; if(!d.includes(ST.s)) d.push(ST.s); S.xp+=15; ST.end=true; ST.asking=false; save(); render(); return; }
+  if(ST.qSel==null) return;
+  const Q=STORY_Q[ST.lang][ST.s], ok=ST.qOpts[ST.qSel]===Q.c;
+  ST.qFb=ok?"ok":"bad";
+  if(ok) S.xp+=10; else S.hearts=Math.max(0,S.hearts-1);
+  save(); render();
+}
+function speakItems(lang,n){ const b=BANKS[lang], W=pairsOf(lang,n), [t,pt]=W[n%W.length]; return [{mode:"speak", q:`Fale em ${b.name.toLowerCase()}: "${pt}"`, ans:t, spk:t}]; }
+function speakBody(ex,C){
+  const b=BANKS[C.lang];
+  const status = C.micUnavailable ? "Seu navegador não tem reconhecimento de voz. Esta atividade será contada como feita." : C.spoken ? `Você disse: <b>${esc(C.spoken)}</b>` : C.micErr ? "Não ouvi direito. Toque no microfone e tente de novo." : "Toque no microfone e fale a palavra.";
+  return `<div class="q">${ex.q}</div><div style="text-align:center;margin-top:24px"><button class="spk" style="width:84px;height:84px;font-size:32px" aria-label="Falar" ${C.fb||C.micUnavailable?"disabled":""} onclick="listen()">🎤</button><p class="intro" style="margin-top:14px">${status}</p><button onclick="say('${ex.ans}','${b.voice}')" style="color:var(--blue);font-weight:800;margin-top:6px">ouvir o modelo 🔊</button><br><button onclick="skipSpeak()" style="color:var(--mut);font-weight:800;margin-top:14px">Não consigo falar agora</button></div>`;
+}
+function listen(){
+  const C=CUR, SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ C.micUnavailable=true; render(); return; }
+  try{
+    const r=new SR(); r.lang=BANKS[C.lang].voice; r.interimResults=false; r.maxAlternatives=1;
+    r.onresult=e=>{ C.spoken=e.results[0][0].transcript; C.micErr=false; render(); };
+    r.onerror=()=>{ C.micErr=true; render(); };
+    C.micErr=false; r.start();
+  }catch(e){ C.micUnavailable=true; render(); }
+}
+
+// Cada lição tem 5 palavras novas, em ordem fixa
+function pairsOf(lang,n){ const P=BANKS[lang].p, L=P.length, base=(n*5+Math.floor(n/12))%L; return [0,1,2,3,4].map(k=>P[(base+k)%L]); }
+// Palavras aprendidas = palavras das lições concluídas
+function learned(lang){ const seen=new Set(), out=[]; S.done[lang].forEach(n=>pairsOf(lang,n).forEach(p=>{ if(!seen.has(p[0])){ seen.add(p[0]); out.push(p); } })); return out; }
+function opts(pool,f,ans){ return shuffle([ans,...shuffle(pool.map(x=>x[f]).filter(x=>x!==ans)).slice(0,3)]); }
+function makeItems(list,pool,lang){
+  const nm=BANKS[lang].name.toLowerCase();
+  return list.map(([t,pt],k)=>{
+    const m=k%4;
+    if(m===0) return {mode:"mc", q:`Como se diz "${pt}" em ${nm}?`, opts:opts(pool,0,t), ans:t};
+    if(m===1) return {mode:"mc", q:`O que significa "${t}"?`, opts:opts(pool,1,pt), ans:pt, spk:t};
+    if(m===3) return {mode:"mc", q:"Ouça e escolha a palavra:", opts:opts(pool,0,t), ans:t, spk:t};
+    if(m===2) return {mode:"type", q:`Escreva em ${nm}: "${pt}"`, ans:t};
+  });
+}
+
+// Lição no estilo Airlearn: primeiro aprende (slides), depois pratica (exercícios com revisão)
+const NOTES={
+ en:[{t:"Pronomes",x:"Em inglês, toda frase precisa de sujeito: I (eu), you (você), we (nós), they (eles). Ex.: I eat rice."},
+ {t:"Verbo no infinitivo",x:"To + verbo é o infinitivo: to eat (comer), to read (ler). Depois de I, you, we e they, tire o 'to': I eat, we read."},
+ {t:"Plural",x:"A maioria dos substantivos recebe -s no plural: one book, two books. Palavras que terminam em -s, -sh ou -ch recebem -es."},
+ {t:"Adjetivo antes do nome",x:"Em inglês o adjetivo vem antes do substantivo: a big house (uma casa grande)."},
+ {t:"Artigos a e an",x:"Use 'a' antes de som de consoante (a dog) e 'an' antes de som de vogal (an apple)."},
+ {t:"Cumprimentos",x:"'Hello' serve a qualquer hora. 'Good morning' vale até o meio-dia, e 'good night' é para se despedir à noite."}],
+ es:[{t:"Pronombres",x:"Em espanhol o pronome costuma ser omitido: 'Como arroz' significa 'Eu como arroz'. Yo = eu, tú = você, nosotros = nós."},
+ {t:"Gênero",x:"Substantivos têm gênero: -o costuma ser masculino (libro, perro) e -a feminino (casa, mesa)."},
+ {t:"Plural",x:"Para o plural, acrescente -s se a palavra termina em vogal (libros) e -es se termina em consoante (ciudades)."},
+ {t:"Artigos el e la",x:"El é masculino e la é feminino, como 'o' e 'a': el libro, la casa."},
+ {t:"Adjetivo depois do nome",x:"Em espanhol o adjetivo costuma vir depois do substantivo: una casa grande."},
+ {t:"Infinitivo",x:"Os verbos no infinitivo terminam em -ar, -er ou -ir: hablar (falar), comer (comer), vivir (viver)."}]
+};
+const DIALOGS={
+ en:[[["Hello!","Olá!"],["How are you?","Como você está?"],["Good, thank you.","Bem, obrigado."]],[["Good morning!","Bom dia!"],["Do you want coffee?","Você quer café?"],["Yes, please.","Sim, por favor."]],[["Where is the bathroom?","Onde fica o banheiro?"],["There, next to the table.","Ali, ao lado da mesa."],["Thank you!","Obrigado!"]],[["I like cats and dogs.","Eu gosto de gatos e cachorros."],["I have a big house.","Eu tenho uma casa grande."],["Nice!","Legal!"]],[["Goodbye, friend!","Tchau, amigo!"],["See you tomorrow.","Até amanhã."],["Good night!","Boa noite!"]],[["What time is it?","Que horas são?"],["It is morning.","É de manhã."],["I want to read a book.","Eu quero ler um livro."]]],
+ es:[[["Hola, ¿qué tal?","Oi, tudo bem?"],["Bien, gracias.","Bem, obrigado."],["¡Buenos días!","Bom dia!"]],[["¿Quieres pan o leche?","Você quer pão ou leite?"],["Quiero leche, por favor.","Quero leite, por favor."],["Aquí tienes.","Aqui está."]],[["¿Dónde está la escuela?","Onde fica a escola?"],["Está en la ciudad.","Fica na cidade."],["Gracias.","Obrigado."]],[["Yo estudio español.","Eu estudo espanhol."],["Mi madre trabaja aquí.","Minha mãe trabalha aqui."],["¡Qué bien!","Que legal!"]],[["¡Hasta luego!","Até logo!"],["Adiós, amigo.","Tchau, amigo."],["¡Buenas noches!","Boa noite!"]],[["Tengo un perro negro.","Eu tenho um cachorro preto."],["Es muy bonito.","Ele é muito bonito."],["Me gusta mucho.","Eu gosto muito."]]]
+};
+function slideCard(w,b){
+  if(Array.isArray(w)) return `<div class="card"><b>${w[0]}</b><span>${w[1]}</span><div style="margin-top:18px"><button class="spk" aria-label="Ouvir" onclick="say('${w[0]}','${b.voice}')">🔊</button></div></div>`;
+  if(w.k==="note") return `<div class="card"><small style="color:var(--blue);font-weight:900;font-size:16px">Gramática</small><b style="font-size:26px;margin-top:8px">${w.t}</b><span>${w.x}</span></div>`;
+  return `<div class="card" style="text-align:left"><small style="color:var(--blue);font-weight:900;font-size:16px">Diálogo</small>${w.lines.map(([tg,pt])=>`<div style="display:flex;gap:10px;align-items:center;margin:12px 0"><button class="spk" aria-label="Ouvir" style="width:38px;height:38px;font-size:16px;flex:none" onclick="say('${tg}','${b.voice}')">🔊</button><div><b style="font-size:19px;display:block">${tg}</b><span>${pt}</span></div></div>`).join("")}</div>`;
+}
+function nextLesson(){ const C=CUR; if(!C||C.kind!=="lesson"||C.n>=499) return quit(); start(C.n+1); }
+function lessonSlides(lang,n,W){ return [{k:"note", ...NOTES[lang][n%6]}, ...W, {k:"dialog", lines:DIALOGS[lang][n%6]}]; }
+function start(n){ refillHearts(); if(S.hearts<=0){ CUR={kind:"lesson", n, lang:S.lang, out:true}; render(); return; }
+  const lang=S.lang, W=pairsOf(lang,n), rev=reviewPairs(lang,n,W), all=W.concat(rev);
+  CUR={kind:"lesson", n, lang, slides:lessonSlides(lang,n,W), si:0, phase:"slides", q:makeItems(all,all,lang).concat(orderItems(lang,n), speakItems(lang,n)), i:0, ok:0, lost:0, sel:null, fb:null, order:[]};
+  render();
+}
+function startDictPractice(){ refillHearts(); if(S.hearts<=0){ CUR={kind:"dict", out:true, lang:S.lang}; render(); return; }
+  const L=dictList(); if(!L.length) return;
+  const list=shuffle(L.slice()).slice(0,8);
+  CUR={kind:"dict", n:null, lang:S.lang, slides:[], si:0, phase:"practice", q:makeItems(list,L,S.lang), i:0, ok:0, lost:0, sel:null, fb:null};
+  render();
+}
+function nextSlide(){ const C=CUR; C.si++; if(C.si>=C.slides.length) C.phase="practice"; render(); }
+function pick(i){ if(CUR && !CUR.fb){ CUR.sel=i; render(); } }
+
+function act(){
+  const C=CUR;
+  if(C.fb){
+    C.fb=null; C.sel=null; C.order=[]; C.spoken=null; C.micErr=false; C.i++;
+    if(S.hearts<=0){ finish(); return; }
+    if(C.i>=C.q.length){ finish(); return; }
+    save(); render(); return;
+  }
+  const ex=C.q[C.i]; let v;
+  if(ex.mode==="order"){ if(!(C.order||[]).length) return; v=C.order.map(i=>ex.words[i]).join(" "); }
+  else if(ex.mode==="mc"){ if(C.sel===null) return; v=ex.opts[C.sel]; }
+  else if(ex.mode==="speak"){ v=C.micUnavailable?ex.ans:C.spoken; if(!v) return; }
+  else { v=document.getElementById("ans").value; if(!v.trim()) return; }
+  const ok=norm(v)===norm(ex.ans);
+  C.fb=ok?"ok":"bad";
+  if(ok){ C.ok++; S.xp+=10; say(ex.spk||ex.ans, BANKS[C.lang].voice); if(ex.mode!=="order" && S.weak && S.weak[C.lang]) S.weak[C.lang]=S.weak[C.lang].filter(t=>t!==(ex.spk||ex.ans)); }
+  else { C.lost++; S.hearts=Math.max(0,S.hearts-1); if(ex.mode!=="order"){ S.weak=S.weak||{en:[],es:[]}; const tg=ex.spk||ex.ans; S.weak[C.lang]=S.weak[C.lang]||[]; if(!S.weak[C.lang].includes(tg)) S.weak[C.lang].push(tg); } if(!ex.retry) C.q.push({...ex, retry:true}); }
+  save(); render();
+}
+
+function finish(){
+  const C=CUR;
+  if(C.kind==="lesson"){ const d=S.done[C.lang]; if(!d.includes(C.n)) d.push(C.n); }
+  S.xp+=20; { const td=today(); S.dayCount=S.dayCount||{}; S.dayCount[td]=(S.dayCount[td]||0)+1; }
+  const t=today(), y=dayStr(1);
+  if(S.last!==t){ S.streak = S.last===y ? S.streak+1 : 1; S.last=t; }
+  C.end=true; save(); render();
+}
+
+function path(){
+  const lang=S.lang, done=S.done[lang]; let h=calHTML()+(S.goal?goalHTML():"")+continueHTML();
+  for(let u=0;u<50;u++){
+    const c=done.filter(x=>x>=u*10 && x<u*10+10).length;
+    h+=`<section class="unit"><h2>Unidade ${u+1} · ${THEMES[u%10]}</h2><p>${c}/10 lições</p></section><div class="path">`;
+    for(let j=0;j<10;j++){
+      const n=u*10+j, open=(n===0||done.includes(n-1)||n<=done.length), d=done.includes(n), off=Math.round(Math.sin(j*1.4)*64);
+      h+=`<button class="node ${d?"done":open?"":"lock"}" style="transform:translateX(${off}px)" aria-label="Lição ${n+1}" ${open?`onclick="start(${n})"`:`onclick="lockMsg()"`}>${d?"✓":n+1}</button>`;
+    }
+    h+="</div>";
+  }
+  return h;
+}
+
+function slidesView(){
+  const C=CUR, b=BANKS[C.lang], w=C.slides[C.si], pct=Math.round(C.si/C.slides.length*100);
+  return `<div id="lesson"><div class="top"><button class="x" aria-label="Sair" onclick="quit()">✕</button><div class="bar"><i style="width:${pct}%"></i></div></div>
+  <p class="intro">Aprenda · ${C.si+1} de ${C.slides.length}</p>
+  ${slideCard(w,b)}
+  <div class="foot"><button class="go" onclick="nextSlide()">${C.si+1<C.slides.length?"Próximo":"Praticar"}</button></div></div>`;
+}
+
+function practiceView(){
+  const C=CUR, ex=C.q[C.i], b=BANKS[C.lang], pct=Math.round(C.i/C.q.length*100);
+  const body = ex.mode==="order" ? orderBody(ex,C) : ex.mode==="speak" ? speakBody(ex,C) : ex.mode==="mc"
+    ? `<div class="q">${ex.q}${ex.spk?`<button class="spk" aria-label="Ouvir" onclick="say('${ex.spk}','${b.voice}')">🔊</button>`:""}</div>
+       <div class="opts">${ex.opts.map((o,i)=>`<button class="opt${C.sel===i?" sel":""}" ${C.fb?"disabled":""} onclick="pick(${i})">${esc(o)}</button>`).join("")}</div>`
+    : `<div class="q">${ex.q}</div><input class="txt" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Digite aqui" ${C.fb?"disabled":""} onkeydown="if(event.key==='Enter')act()">`;
+  const fb = C.fb==="ok" ? `<div class="fb" style="color:var(--okt)">Correto! 🎉</div>`
+           : C.fb==="bad" ? `<div class="fb" style="color:var(--badt)">Resposta certa: ${ex.ans}</div>` : "";
+  const dis = !C.fb && ((ex.mode==="mc" && C.sel===null) || (ex.mode==="order" && !(C.order||[]).length) || (ex.mode==="speak" && !C.spoken && !C.micUnavailable)) ? "disabled" : "";
+  return `<div id="lesson"><div class="top"><button class="x" aria-label="Sair" onclick="quit()">✕</button><div class="bar"><i style="width:${pct}%"></i></div></div>
+    ${body}
+    <div class="foot ${C.fb==="ok"?"ok":C.fb==="bad"?"bad":""}"><div style="font-weight:900;margin-bottom:8px">❤️ ${S.hearts}</div>${fb}<button class="go" ${dis} onclick="act()">${C.fb?"Continuar":"Verificar"}</button></div></div>`;
+}
+
+function endView(){
+  const C=CUR, t=C.ok+C.lost, acc=t?Math.round(C.ok/t*100):0;
+  return `<div id="lesson" class="center"><div class="big">🏆</div><h2 class="res">${C.kind==="lesson"?"Lição concluída!":"Prática concluída!"}</h2>
+    <p style="color:var(--mut);font-weight:700">Acertos: ${C.ok}/${t} (${acc}%)</p>${S.hearts<=0?'<p style="color:var(--badt);font-weight:800">Sem corações por hoje. A próxima lição abre quando você voltar amanhã.</p>':""}
+    <p style="font-weight:900;color:#d89a00">+${C.ok*10+20} XP</p>
+    <button class="go" style="margin-top:24px" onclick="quit()">Continuar</button>${C.kind==="lesson"?`<button class="tab" style="display:block;width:100%;max-width:520px;margin:12px auto 0;text-align:center" onclick="nextLesson()">Próxima lição</button>`:""}</div>`;
+}
+
+const CAT_NAMES=[["tudo","Tudo"],["frases","Frases"],["substantivo","Substantivo"],["pronome","Pronome"],["adjetivo","Adjetivo"],["verbo","Verbo"],["adverbio","Advérbio"]];
+const CATS={
+ en:{frases:["hello","goodbye","please","thank you","yes","no"],pronome:["I","you","we","they"],verbo:["to eat","to drink","to read","to write","to go","to see"],adjetivo:["big","small","good","bad","happy","sad","hot","cold","red","blue","green","white","black","one","two","three","four","five","old","new","fast","slow","easy","hard"],adverbio:["today","tomorrow","yesterday","always","never","here","there","very","now"]},
+ es:{frases:["hola","adiós","gracias","sí","no","buenos días","buenas noches"],pronome:["yo","tú","nosotros","ellos"],verbo:["leer","escribir","hablar","trabajar","estudiar","necesitar","querer","buscar"],adjetivo:["rojo","blanco","negro","uno","dos","tres","cuatro","diez","pequeño","bueno","malo","contento","caliente","frío","viejo","nuevo","lento"],adverbio:["hoy","mañana","ayer","siempre","aquí","allí","muy","ahora"]}
+};
+let DCAT="tudo";
+function catOf(lang,t){ const C=CATS[lang]; for(const k in C) if(C[k].includes(t)) return k; return "substantivo"; }
+function dictList(){ const L=learned(S.lang); return DCAT==="tudo"?L:L.filter(p=>catOf(S.lang,p[0])===DCAT); }
+function catChips(){ return `<div class="modes" style="margin:12px 0 0;gap:6px">${CAT_NAMES.map(([k,l])=>`<button class="tab ${DCAT===k?"on":""}" style="padding:6px 10px;font-size:14px" onclick="setDcat('${k}')">${l}</button>`).join("")}</div>`; }
+function setDcat(c){ DCAT=c; render(); }
+function dictView(){
+  const L=dictList(), b=BANKS[S.lang];
+  const rows=L.map(([t,pt])=>`<div class="row" data-w="${esc(t+" "+pt)}"><button class="spk" aria-label="Ouvir" onclick="say('${t}','${b.voice}')">🔊</button><div><b style="font-size:19px">${t}</b><small>${pt}</small></div></div>`).join("");
+  return `<main><p class="intro">${L.length} palavra(s) aprendida(s) em ${b.name.toLowerCase()}.</p>
+    <button class="go" ${L.length?"":"disabled"} onclick="startDictPractice()" style="margin-top:10px">Praticar estas palavras</button>
+    ${catChips()}<input id="search" placeholder="Buscar palavra" oninput="filterDict(this.value)">
+    <div id="dl">${rows||'<p class="intro">Complete uma lição para as palavras aparecerem aqui.</p>'}</div></main>`;
+}
+function filterDict(v){ const q=norm(v); document.querySelectorAll("#dl .row").forEach(r=>{ r.style.display = norm(r.dataset.w).includes(q) ? "" : "none"; }); }
+
+function storiesView(){
+  const L=STORIES[S.lang], d=S.stories[S.lang];
+  return L.map((s,i)=>{ const open=i===0||d.includes(i-1), done=d.includes(i);
+    return `<button class="unit${open?"":" lock"}" ${open?`onclick="openStory(${i})"`:"disabled"}><h2>${s.t}</h2><p>${done?"✓ Concluída":open?s.l.length+" frases":"Bloqueada"}</p></button>`; }).join("");
+}
+function openStory(s){ refillHearts(); ST={lang:S.lang, s, i:0, sel:null, fb:null, ok:0, end:false, out:S.hearts<=0}; render(); }
+function stPick(i){ if(ST && !ST.fb){ ST.sel=i; render(); } }
+function stAct(){
+  const L=STORIES[ST.lang][ST.s].l, line=L[ST.i];
+  if(ST.fb){
+    ST.fb=null; ST.sel=null; ST.i++; if(S.hearts<=0){ ST.out=true; save(); render(); return; }
+    if(ST.i>=L.length){ ST.asking=true; }
+    save(); render(); return;
+  }
+  if(ST.sel===null) return;
+  const ok=line[2][ST.sel]===line[1];
+  ST.fb=ok?"ok":"bad";
+  if(ok){ ST.ok++; S.xp+=5; } else { S.hearts=Math.max(0,S.hearts-1); }
+  say(line[0].replace("___",line[1]), BANKS[ST.lang].voice);
+  save(); render();
+}
+function storyView(){
+  const b=BANKS[ST.lang];
+  if(ST.end) return `<div id="lesson" class="center"><div class="big">📖</div><h2 class="res">História concluída!</h2><p style="font-weight:900;color:#d89a00">+${15+ST.ok*5} XP</p><button class="go" style="margin-top:24px" onclick="ST=null;render()">Continuar</button></div>`;
+  const L=STORIES[ST.lang][ST.s].l, line=L[ST.i], pct=Math.round(ST.i/L.length*100), full=line[0].replace("___",line[1]);
+  const body = ST.fb
+    ? `<div class="q">${full}<button class="spk" aria-label="Ouvir" onclick="say('${full}','${b.voice}')">🔊</button></div><p style="color:var(--mut);font-weight:700">${line[3]}</p>`
+    : `<div class="q">${line[0]}</div><div class="opts">${line[2].map((o,i)=>`<button class="opt${ST.sel===i?" sel":""}" ${ST.fb?"disabled":""} onclick="stPick(${i})">${o}</button>`).join("")}</div>`;
+  const fb = ST.fb==="ok" ? `<div class="fb" style="color:var(--okt)">Isso mesmo! 🎉</div>` : ST.fb==="bad" ? `<div class="fb" style="color:var(--badt)">Era "${line[1]}"</div>` : "";
+  return `<div id="lesson"><div class="top"><button class="x" aria-label="Sair" onclick="ST=null;render()">✕</button><button class="x" aria-label="Ouvir história" onclick="sayStory()">🔊</button><div class="bar"><i style="width:${pct}%"></i></div></div>${body}<div class="foot ${ST.fb==="ok"?"ok":ST.fb==="bad"?"bad":""}">${fb}<button class="go" ${!ST.fb&&ST.sel===null?"disabled":""} onclick="stAct()">${ST.fb?"Continuar":"Verificar"}</button></div></div>`;
+}
+
+function chatView(){
+  if(CH.lang!==S.lang) CH={lang:S.lang, msgs:[], busy:false};
+  const n=BANKS[S.lang].name.toLowerCase();
+  const bubs=CH.msgs.map(m=>`<div class="bub ${m.role}">${esc(m.content)}</div>`).join("");
+  return `<main><p class="intro">Converse em ${n}. A IA corrige seus erros e ensina palavras novas.</p><div class="chat">${bubs||`<div class="bub assistant">Olá! Escreva algo em ${n} para começar.</div>`}${CH.busy?`<div class="bub assistant">…</div>`:""}</div><div class="cbar"><input id="msg" class="txt" autocomplete="off" placeholder="Escreva em ${n}" ${CH.busy?"disabled":""} onkeydown="if(event.key==='Enter')chatSend()"><button class="go" style="width:auto;padding:14px 18px" ${CH.busy?"disabled":""} onclick="chatSend()">Enviar</button></div></main>`;
+}
+async function chatSend(){
+  const inp=document.getElementById("msg"), t=inp?inp.value.trim():"";
+  if(!t||CH.busy) return;
+  CH.msgs.push({role:"user", content:t}); CH.busy=true; render();
+  const n=BANKS[CH.lang].name.toLowerCase();
+  const sys=`Você é um professor de ${n} para um falante de português. Converse em ${n} com frases simples. Depois de cada mensagem do aluno, responda assim: primeiro uma resposta curta em ${n}; depois "Correção:" com o erro corrigido e uma explicação curta em português (ou "Correção: nenhuma"); depois "Palavra nova:" com 1 ou 2 palavras úteis e a tradução. Seja breve.`;
+  let reply;
+  try{
+    const sample = window.claude ? await window.claude.use("sample") : null;
+    if(!sample) throw 0;
+    const msgs=CH.msgs.map((m,i)=> i===0 ? {role:m.role, content:sys+"\n\nAluno: "+m.content} : m);
+    const r=await sample(msgs,{modelTier:"quick", cache:false});
+    reply=r.text;
+  }catch(e){ reply="Não consegui responder agora. Tente de novo."; }
+  CH.msgs.push({role:"assistant", content:reply}); CH.busy=false; render();
+}
+
+function shell(){
+  const m=S.mode||"path";
+  const tabs=Object.entries(BANKS).map(([k,b])=>`<button class="tab ${S.lang===k?"on":""}" onclick="setLang('${k}')">${b.flag} ${b.name}</button>`).join("");
+  const modes=[["path","Lições"],["stories","Histórias"],["chat","Conversa com IA"],["dict","Dicionário"],["profile","Perfil"]].map(([k,l])=>`<button class="tab ${m===k?"on":""}" onclick="setMode('${k}')">${l}</button>`).join("");
+  return `<header>${logoSVG(34)}${tabs}<div class="stats"><span>🔥 ${S.streak}</span><span>⚡ ${S.xp}</span><span>❤️ ${S.hearts}</span><button onclick="toggleMute()" aria-label="Som" style="font-size:18px">${S.mute?"🔇":"🔊"}</button></div><div class="modes">${modes}</div></header>`;
+}
+
+function render(){ refillHearts();
+  const app=document.getElementById("app");
+  if(ST){ app.innerHTML=ST.out?outView():ST.asking?quesView():storyView(); return; }
+  if(CUR){
+    if(CUR.out) app.innerHTML=outView(); else if(CUR.end) app.innerHTML=endView();
+    else if(CUR.phase==="slides") app.innerHTML=slidesView();
+    else { app.innerHTML=practiceView(); const a=document.getElementById("ans"); if(a) a.focus(); }
+    return;
+  }
+  const m=S.mode||"path";
+  const body = (S.goal===undefined||S.lvEs===undefined) ? onboardView() : m==="stories" ? `<main><p class="intro">Complete as frases com a palavra certa.</p>${storiesView()}</main>`
+             : m==="chat" ? chatView()
+             : m==="profile" ? profileView() : m==="dict" ? dictView()
+             : `<main>${path()}</main>`;
+  app.innerHTML = shell() + body;
+}
+render();
+</script>
+</body>
+</html>
