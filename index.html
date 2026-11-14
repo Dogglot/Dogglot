@@ -118,7 +118,6 @@ const STORIES = {
 const THEMES = ["Saudações","Família","Comida","Apresentações","Casa","Cozinha","Bebidas","Frutas","Legumes","Cores","Números","Tempo","Dias da semana","Meses","Estações","Clima","Corpo","Saúde","Roupas","Compras","Dinheiro","Transporte","Cidade","Lugares","Escola","Trabalho","Profissões","Animais","Natureza","Viagem","Hotel","Restaurante","Esportes","Hobbies","Música","Tecnologia","Emoções","Personalidade","Descrições","Tamanhos","Formas","Verbos do dia a dia","Verbos de movimento","Verbos de comunicação","Ações em casa","Perguntas","Advérbios","Direções","Pedidos educados","Revisão geral"];
 const KEY = "aprender-idiomas-v1";
 let S = load(), CUR = null, ST = null, CH = { lang:"en", msgs:[], busy:false };
-refillHearts();
 
 function load(){
   try{ const d = JSON.parse(localStorage.getItem(KEY)); if(d && d.done){ d.stories = d.stories || {en:[],es:[]}; for(const l of ["en","es"]) d.done[l]=(d.done[l]||[]).map(Number); d.weak=d.weak||{en:[],es:[]}; d.dayCount=d.dayCount||{}; return d; } }catch(e){}
@@ -134,7 +133,7 @@ function setLang(l){ S.lang=l; save(); render(); }
 function today(){ return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date()); }
 function refillHearts(){ if(ME) return; const t=today(); if(S.heartsDay!==t){ S.hearts=3; S.heartsDay=t; save(); } }
 function outView(){ return `<div id="lesson" class="center"><div class="big">💔</div><h2 class="res">Sem corações por hoje</h2><p style="color:var(--mut);font-weight:700">Suas 3 vidas voltam à meia-noite, no horário de Brasília.</p><button class="go" style="margin-top:24px" onclick="quit()">Voltar</button></div>`; }
-window.onerror=function(){ return true; };
+window.onerror=function(m){ const a=document.getElementById("app"); if(a) a.insertAdjacentHTML("afterbegin", `<div style="background:#fee;color:#900;padding:10px;font-size:13px">Erro: ${String(m)}</div>`); };
 const __errBox=function(m){ const a=document.getElementById("app"); if(a) a.insertAdjacentHTML("afterbegin", `<div style="background:#fee;color:#900;padding:10px;font-size:13px">Erro: ${esc(m)}</div>`); };
 function quit(){ CUR=null; ST=null; render(); }
 function reviewPairs(lang,n,W){
