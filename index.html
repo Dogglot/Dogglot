@@ -3,7 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Aprender Idiomas</title>
+<title>Dogglot</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#2fb86e">
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/sw.js");}</script>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>window.OneSignalDeferred=window.OneSignalDeferred||[];OneSignalDeferred.push(async function(OneSignal){await OneSignal.init({appId:"SEU_APP_ID_ONESIGNAL",allowLocalhostAsSecureOrigin:true});});</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
 <style>
@@ -184,7 +190,7 @@ function toggleMute(){ S.mute=!S.mute; save(); render(); }
 function continueHTML(){ const d=S.done[S.lang]; let n=0; while(d.includes(n) && n<499) n++; return `<button class="go" style="margin:14px 0 0" onclick="start(${n})">Continuar: Lição ${n+1}</button>`; }
 function profileView(){
   const row=(l,v)=>`<div class="row" style="justify-content:space-between"><b>${l}</b><span>${v}</span></div>`;
-  return `<main><div style='text-align:center'>${dogSVG(S.avatar||"normal",110)}</div><h2 class="res" style="margin-top:4px">Seu progresso</h2>${avatarGrid()}${ME&&ME.role==="admin"?`<button class="go" style="margin-top:12px" onclick="ADMIN=null;setMode('admin')">Ver usuários</button>`:""}<button class="go" style="margin-top:12px;background:var(--card);color:var(--tx);box-shadow:0 6px 0 var(--line);border:2px solid var(--line)" onclick="logout()">Sair da conta</button>${row("Lições de inglês",S.done.en.length)}${row("Lições de espanhol",S.done.es.length)}${row("Palavras aprendidas em inglês",learned("en").length)}${row("Palavras aprendidas em espanhol",learned("es").length)}${row("XP total",S.xp)}${row("Sequência",S.streak+" dia(s)")}</main>`;
+  return `<main><div style='text-align:center'>${dogSVG(S.avatar||"normal",110)}</div><h2 class="res" style="margin-top:4px">Seu progresso</h2>${avatarGrid()}${proCard()}${extrasCard()}${ME&&ME.role==="admin"?`<button class="go" style="margin-top:12px" onclick="ADMIN=null;setMode('admin')">Ver usuários</button>`:""}<button class="go" style="margin-top:12px;background:var(--card);color:var(--tx);box-shadow:0 6px 0 var(--line);border:2px solid var(--line)" onclick="logout()">Sair da conta</button>${row("Lições de inglês",S.done.en.length)}${row("Lições de espanhol",S.done.es.length)}${row("Palavras aprendidas em inglês",learned("en").length)}${row("Palavras aprendidas em espanhol",learned("es").length)}${row("XP total",S.xp)}${row("Sequência",S.streak+" dia(s)")}</main>`;
 }
 function setLvl(lang,k){ const key=lang==="en"?"lvEn":"lvEs"; S[key]=k; for(let i=0;i<k;i++) if(!S.done[lang].includes(i)) S.done[lang].push(i); save(); render(); }
 function skipSpeak(){ const C=CUR; if(!C||C.fb) return; C.spoken=null; C.micErr=false; C.order=[]; C.sel=null; C.i++; if(C.i>=C.q.length){ finish(); return; } save(); render(); }
@@ -396,7 +402,7 @@ function practiceView(){
   const dis = !C.fb && ((ex.mode==="mc" && C.sel===null) || (ex.mode==="order" && !(C.order||[]).length) || (ex.mode==="speak" && !C.spoken && !C.micUnavailable)) ? "disabled" : "";
   return `<div id="lesson"><div class="top"><button class="x" aria-label="Sair" onclick="quit()">✕</button><div class="bar"><i style="width:${pct}%"></i></div></div>
     ${body}
-    <div class="foot ${C.fb==="ok"?"ok":C.fb==="bad"?"bad":""}"><div style="font-weight:900;margin-bottom:8px">❤️ ${ME&&ME.role==="admin"?"∞":S.hearts}</div>${fb}<button class="go" ${dis} onclick="act()">${C.fb?"Continuar":"Verificar"}</button></div></div>`;
+    <div class="foot ${C.fb==="ok"?"ok":C.fb==="bad"?"bad":""}"><div style="font-weight:900;margin-bottom:8px">❤️ ${S.hearts>=999?"∞":S.hearts}</div>${fb}<button class="go" ${dis} onclick="act()">${C.fb?"Continuar":"Verificar"}</button></div></div>`;
 }
 
 function endView(){
@@ -486,10 +492,10 @@ function shell(){
   const m=S.mode||"path";
   const tabs=Object.entries(BANKS).map(([k,b])=>`<button class="tab ${S.lang===k?"on":""}" onclick="setLang('${k}')">${b.flag} ${b.name}</button>`).join("");
   const modes=[["path","Lições"],["stories","Histórias"],["chat","Conversa com IA"],["dict","Dicionário"],["profile","Perfil"]].map(([k,l])=>`<button class="tab ${m===k?"on":""}" onclick="setMode('${k}')">${l}</button>`).join("");
-  return `<header>${logoSVG(34)}${tabs}<div class="stats"><span>🔥 ${S.streak}</span><span>⚡ ${S.xp}</span><span>❤️ ${ME&&ME.role==="admin"?"∞":S.hearts}</span><button onclick="toggleMute()" aria-label="Som" style="font-size:18px">${S.mute?"🔇":"🔊"}</button></div><div class="modes">${modes}</div></header>`;
+  return `<header>${logoSVG(34)}${tabs}<div class="stats"><span>🔥 ${S.streak}</span><span>⚡ ${S.xp}</span><span>❤️ ${S.hearts>=999?"∞":S.hearts}</span><button onclick="toggleMute()" aria-label="Som" style="font-size:18px">${S.mute?"🔇":"🔊"}</button></div><div class="modes">${modes}</div></header>`;
 }
 
-let ME=null, AUTH_READY=false, ADMIN=null, syncT=null;
+let ME=null, AUTH_READY=false, ADMIN=null, syncT=null, AUTH_MSG="", RESET_TOKEN=null, RANK=null;
 function defaultState(){ return {xp:0,streak:0,last:"",lang:"en",mode:"path",done:{en:[],es:[]},stories:{en:[],es:[]},hearts:3,heartsDay:"",weak:{en:[],es:[]},dayCount:{}}; }
 function syncProgress(){ clearTimeout(syncT); syncT=setTimeout(()=>{ fetch("/api/progress",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({progress:S})}).catch(()=>{}); },800); }
 async function loadMe(){
@@ -500,7 +506,14 @@ async function loadMe(){
   try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
   return true;
 }
-async function boot(){ try{ await loadMe(); }catch(e){ ME=null; } AUTH_READY=true; render(); }
+async function boot(){
+  const q=new URLSearchParams(location.search);
+  if(q.get("verificado")) AUTH_MSG="E-mail confirmado! Agora é só entrar.";
+  if(q.get("reset")) RESET_TOKEN=q.get("reset");
+  if(q.has("verificado")||q.has("reset")) history.replaceState(null,"",location.pathname);
+  try{ await loadMe(); }catch(e){ ME=null; }
+  AUTH_READY=true; render();
+}
 async function authSubmit(mode){
   const name=document.getElementById("aName").value.trim(), email=document.getElementById("aEmail").value.trim(), password=document.getElementById("aPass").value;
   const err=document.getElementById("aErr"); err.textContent="";
@@ -508,6 +521,7 @@ async function authSubmit(mode){
     const r=await fetch(mode==="signup"?"/api/signup":"/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(mode==="signup"?{name,email,password}:{email,password})});
     const d=await r.json().catch(()=>({}));
     if(!r.ok){ err.textContent=d.error||"Não foi possível entrar."; return; }
+    if(d.verify){ AUTH_MSG="Enviamos um e-mail de confirmação. Confirme seu e-mail para entrar."; render(); return; }
     await loadMe(); render();
   }catch(e){ err.textContent="Sem conexão com o servidor. Tente de novo."; }
 }
@@ -516,8 +530,55 @@ async function logout(){
   try{ localStorage.removeItem(KEY); }catch(e){}
   location.reload();
 }
-function authView(){
-  return `<main style="padding-top:24px"><div style="text-align:center">${logoSVG(96)}</div><h2 class="res" style="text-align:center">Dogglot</h2><p class="intro" style="text-align:center">Entre ou crie sua conta para salvar seu progresso.</p><div class="card" style="text-align:left"><input id="aName" class="txt" placeholder="Nome (só para cadastro)" autocomplete="name"><input id="aEmail" class="txt" type="email" placeholder="E-mail" autocomplete="email"><input id="aPass" class="txt" type="password" placeholder="Senha (mínimo 6 caracteres)" autocomplete="current-password"><p id="aErr" style="color:var(--badt);font-weight:800;min-height:22px;margin:12px 0 0"></p><button class="go" onclick="authSubmit('login')">Entrar</button><button class="go" style="margin-top:10px;background:var(--card);color:var(--tx);box-shadow:0 6px 0 var(--line);border:2px solid var(--line)" onclick="authSubmit('signup')">Criar conta</button></div></main>`;
+function resetView(){
+  return `<main style="padding-top:24px"><div style="text-align:center">${logoSVG(96)}</div><h2 class="res" style="text-align:center">Nova senha</h2><div class="card" style="text-align:left"><input id="rPass" class="txt" type="password" placeholder="Nova senha (mínimo 6 caracteres)"><p id="aErr" style="color:var(--badt);font-weight:800;min-height:22px;margin:12px 0 0">${esc(AUTH_MSG)}</p><button class="go" onclick="resetSubmit()">Salvar nova senha</button></div></main>`;
+}
+async function resetSubmit(){
+  const password=document.getElementById("rPass").value, err=document.getElementById("aErr");
+  err.textContent="";
+  try{
+    const r=await fetch("/api/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:RESET_TOKEN,password})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ err.textContent=d.error||"Não foi possível trocar a senha."; return; }
+    RESET_TOKEN=null; AUTH_MSG="Senha alterada. Agora entre com a nova senha."; render();
+  }catch(e){ err.textContent="Sem conexão com o servidor."; }
+}
+async function forgotSubmit(){
+  const email=document.getElementById("aEmail").value.trim(), err=document.getElementById("aErr");
+  err.textContent="";
+  try{
+    const r=await fetch("/api/forgot",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ err.textContent=d.error||"Tente de novo mais tarde."; return; }
+    AUTH_MSG="Se este e-mail estiver cadastrado, enviamos um link para criar uma nova senha."; render();
+  }catch(e){ err.textContent="Sem conexão com o servidor."; }
+}
+function enableNotif(){
+  window.OneSignalDeferred=window.OneSignalDeferred||[];
+  window.OneSignalDeferred.push(function(os){ os.Notifications.requestPermission(); });
+}
+function extrasCard(){
+  const total=S.done.en.length+S.done.es.length, words=learned("en").length+learned("es").length, hist=S.stories.en.length+S.stories.es.length;
+  const ach=[["Primeira lição",total>=1],["5 lições",total>=5],["20 lições",total>=20],["Sequência de 7 dias",S.streak>=7],["Primeira história",hist>=1],["10 histórias",hist>=10],["100 palavras aprendidas",words>=100],["500 XP",S.xp>=500]];
+  if(RANK===null){ fetch("/api/ranking").then(r=>r.ok?r.json():[]).then(d=>{ RANK=d; render(); }).catch(()=>{ RANK=[]; render(); }); }
+  const rank=RANK===null?"<small>Carregando ranking...</small>":RANK.length?RANK.map((p,i)=>`<small>${i+1}. ${esc(p.nome)} · ${p.xp} XP</small>`).join("<br>"):"<small>Sem dados ainda.</small>";
+  const box="flex-direction:column;align-items:flex-start;gap:6px;margin-top:12px";
+  return `<div class="row" style="${box}"><b>Conquistas</b>${ach.map(([n,ok])=>`<small>${ok?"✓":"🔒"} ${n}</small>`).join("")}</div>
+  <div class="row" style="${box}"><b>Ranking (top 10)</b>${rank}</div>
+  <div class="row" style="${box}"><b>Lembrete diário</b><small>Receba uma notificação para não perder o hábito.</small><button class="go" style="margin-top:6px" onclick="enableNotif()">Ativar notificações</button></div>
+  <p class="intro" style="text-align:center"><a href="/privacidade.html">Política de privacidade</a></p>`;
+}
+function authView(){ if(RESET_TOKEN) return resetView();
+  return `<main style="padding-top:24px"><div style="text-align:center">${logoSVG(96)}</div><h2 class="res" style="text-align:center">Dogglot</h2><p class="intro" style="text-align:center">Entre ou crie sua conta para salvar seu progresso.</p><div class="card" style="text-align:left"><input id="aName" class="txt" placeholder="Nome (só para cadastro)" autocomplete="name"><input id="aEmail" class="txt" type="email" placeholder="E-mail" autocomplete="email"><input id="aPass" class="txt" type="password" placeholder="Senha (mínimo 6 caracteres)" autocomplete="current-password"><p id="aErr" style="color:var(--badt);font-weight:800;min-height:22px;margin:12px 0 0">${esc(AUTH_MSG)}</p><button class="go" onclick="authSubmit('login')">Entrar</button><button onclick="forgotSubmit()" style="color:var(--blue);font-weight:800;margin-top:12px;width:100%">Esqueci minha senha</button><button class="go" style="margin-top:10px;background:var(--card);color:var(--tx);box-shadow:0 6px 0 var(--line);border:2px solid var(--line)" onclick="authSubmit('signup')">Criar conta</button></div><p class="intro" style="text-align:center;margin-top:16px"><a href="/privacidade.html">Política de privacidade</a></p></main>`;
+}
+function proCard(){
+  const isAdm=ME&&ME.role==="admin", pro=ME&&ME.plan==="pro";
+  const label=isAdm?"Administrador":pro?"Pro":"Grátis";
+  return `<div class="row" style="flex-direction:column;align-items:flex-start;gap:6px;margin-top:12px"><b>Plano: ${label}</b><small>Pro: R$ 6 por mês ou R$ 50 por ano. Corações ilimitados e lembretes.</small><button class="go" style="margin-top:6px" disabled>Assinar (em breve)</button></div>`;
+}
+async function grantPro(email){
+  const r=await fetch("/api/admin/plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,plan:"pro",days:30})});
+  if(r.ok){ ADMIN=null; render(); }
 }
 function adminView(){
   if(!ADMIN){
@@ -525,10 +586,10 @@ function adminView(){
     return `<main><p class="intro">Carregando usuários...</p></main>`;
   }
   if(!Array.isArray(ADMIN)) return `<main><p class="intro">${esc(ADMIN.error||"Sem permissão")}</p><button class="go" onclick="setMode('profile')">Voltar</button></main>`;
-  return `<main><h2 class="res" style="margin-top:12px">Usuários (${ADMIN.length})</h2><button class="go" style="margin:8px 0 14px" onclick="ADMIN=null;render()">Atualizar</button>${ADMIN.map(u=>`<div class="row" style="flex-direction:column;align-items:flex-start;gap:4px"><b>${esc(u.nome)}</b><small>${esc(u.email)} · ${esc(u.papel)} · corações: ${esc(u.coracoes)}</small><small>Próxima lição: inglês ${u.proxima_licao.ingles} · espanhol ${u.proxima_licao.espanhol}</small></div>`).join("")}</main>`;
+  return `<main><h2 class="res" style="margin-top:12px">Usuários (${ADMIN.length})</h2><p class="intro">Lições concluídas no total: ${ADMIN.reduce((s,u)=>s+u.licoes_concluidas.ingles+u.licoes_concluidas.espanhol,0)}</p><button class="go" style="margin:8px 0 14px" onclick="ADMIN=null;render()">Atualizar</button>${ADMIN.map(u=>`<div class="row" style="flex-direction:column;align-items:flex-start;gap:4px"><b>${esc(u.nome)}</b><small>${esc(u.email)} · ${esc(u.papel)} · corações: ${esc(u.coracoes)}</small><small>Próxima lição: inglês ${u.proxima_licao.ingles} · espanhol ${u.proxima_licao.espanhol}</small><button class="go" style="margin-top:6px;padding:10px" onclick="grantPro('${esc(u.email)}')">Dar Pro (30 dias, teste)</button></div>`).join("")}</main>`;
 }
 function loseHeart(){
-  if(ME&&ME.role==="admin") return;
+  if(S.hearts>=999) return;
   S.hearts=Math.max(0,S.hearts-1);
   if(ME) fetch("/api/hearts/lose",{method:"POST"}).then(r=>r.json()).then(d=>{ if(d&&d.hearts!=null) S.hearts=d.hearts; }).catch(()=>{});
 }
