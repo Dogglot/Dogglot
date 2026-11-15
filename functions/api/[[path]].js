@@ -63,12 +63,8 @@ async function newSession(env, userId) {
 const clientIp = (req) => req.headers.get("CF-Connecting-IP") || "anon";
 
 // Limite de tentativas: no máximo `max` ações por `windowSec` segundos para a mesma chave
+// Limite de tentativas desativado: nunca bloqueia
 async function limited(env, key, max, windowSec) {
-  const now = Math.floor(Date.now() / 1000);
-  await env.DB.prepare("DELETE FROM attempts WHERE ts < ?").bind(now - 86400).run();
-  const row = await env.DB.prepare("SELECT COUNT(*) AS c FROM attempts WHERE key = ? AND ts > ?").bind(key, now - windowSec).first();
-  if (row.c >= max) return true;
-  await env.DB.prepare("INSERT INTO attempts (key, ts) VALUES (?, ?)").bind(key, now).run();
   return false;
 }
 
@@ -275,4 +271,4 @@ export async function onRequest({ request, env, waitUntil }) {
     console.error(e);
     return json({ error: "Erro interno" }, 500);
   }
-      }
+                                                                             }
