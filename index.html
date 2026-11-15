@@ -278,6 +278,15 @@ function weekRow(){
 // Modo sem internet: o progresso fica no aparelho e é enviado quando a conexão voltar
 window.addEventListener("online",()=>{ if(ME) syncProgress(); });
 
+let PRIVACY=false;
+function privacyView(){
+  return `<main style="padding-top:12px"><button onclick="PRIVACY=false;render()" style="color:var(--blue);font-weight:800">← Voltar</button><h2 class="res">Política de privacidade</h2>
+  <p class="intro">Coletamos seu nome, seu e-mail e sua senha, que fica guardada de forma criptografada. Também guardamos seu progresso de estudo e a data do último dia em que você estudou.</p>
+  <p class="intro">Usamos esses dados para permitir o login, salvar seu progresso, enviar e-mails de confirmação e de troca de senha, mostrar o ranking e enviar lembretes.</p>
+  <p class="intro">Usamos serviços de terceiros para funcionar: Cloudflare (hospedagem e banco de dados), Brevo (e-mails) e OneSignal (notificações, se você ativar). Não vendemos seus dados.</p>
+  <p class="intro">Você pode apagar sua conta no perfil, em "Apagar minha conta". Para outras dúvidas, escreva para dogglot.app@outlook.com.</p></main>`;
+}
+function showPrivacy(){ PRIVACY=true; render(); }
 function setTheme(t){ S.theme=t; save(); render(); }
 function applyTheme(){ const t=S.theme; if(t&&t!=="auto") document.documentElement.setAttribute("data-theme",t); else document.documentElement.removeAttribute("data-theme"); }
 function themeRow(){
@@ -695,7 +704,7 @@ async function resetSubmit(){
     const r=await fetch("/api/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:RESET_TOKEN,password})});
     const d=await r.json().catch(()=>({}));
     if(!r.ok){ err.textContent=d.error||"Não foi possível trocar a senha."; return; }
-    RESET_TOKEN=null; AUTH_MSG="Senha alterada. Agora entre com a nova senha."; render();
+    RESET_TOKEN=null; ME=null; AUTH_MSG="Senha alterada. Agora entre com a nova senha."; render();
   }catch(e){ err.textContent="Sem conexão com o servidor."; }
 }
 async function forgotSubmit(){
@@ -721,10 +730,10 @@ function extrasCard(){
   return `<div class="row" style="${box}"><b>Conquistas</b>${ach.map(([n,ok])=>`<small>${ok?"✓":"🔒"} ${n}</small>`).join("")}</div>
   <div class="row" style="${box}"><b>Ranking (top 10)</b>${rank}</div>
   ${themeRow()}${diffRow()}${weekRow()}${accountCard()}<div class="row" style="${box}"><b>Lembrete diário</b><small>Receba uma notificação para não perder o hábito.</small><button class="go" style="margin-top:6px" onclick="enableNotif()">Ativar notificações</button></div>
-  <p class="intro" style="text-align:center"><a href="/privacidade.html">Política de privacidade</a></p>`;
+  <p class="intro" style="text-align:center"><a href="#" onclick="showPrivacy();return false;">Política de privacidade</a></p>`;
 }
 function authView(){ if(RESET_TOKEN) return resetView();
-  return `<main style="padding-top:24px"><div style="text-align:center">${logoSVG(96)}</div><h2 class="res" style="text-align:center">Dogglot</h2><p class="intro" style="text-align:center">Entre ou crie sua conta para salvar seu progresso.</p><div class="card" style="text-align:left"><input id="aName" class="txt" placeholder="Nome (só para cadastro)" autocomplete="name"><input id="aEmail" class="txt" type="email" placeholder="E-mail" autocomplete="email"><input id="aPass" class="txt" type="password" placeholder="Senha (mínimo 6 caracteres)" autocomplete="current-password"><p id="aErr" style="color:var(--badt);font-weight:800;min-height:22px;margin:12px 0 0">${esc(AUTH_MSG)}</p><button class="go" onclick="authSubmit('login')">Entrar</button><button onclick="forgotSubmit()" style="color:var(--blue);font-weight:800;margin-top:12px;width:100%">Esqueci minha senha</button><button class="go" style="margin-top:10px;background:var(--card);color:var(--tx);box-shadow:0 6px 0 var(--line);border:2px solid var(--line)" onclick="authSubmit('signup')">Criar conta</button></div><p class="intro" style="text-align:center;margin-top:16px"><a href="/privacidade.html">Política de privacidade</a></p></main>`;
+  return `<main style="padding-top:24px"><div style="text-align:center">${logoSVG(96)}</div><h2 class="res" style="text-align:center">Dogglot</h2><p class="intro" style="text-align:center">Entre ou crie sua conta para salvar seu progresso.</p><div class="card" style="text-align:left"><input id="aName" class="txt" placeholder="Nome (só para cadastro)" autocomplete="name"><input id="aEmail" class="txt" type="email" placeholder="E-mail" autocomplete="email"><input id="aPass" class="txt" type="password" placeholder="Senha (mínimo 6 caracteres)" autocomplete="current-password"><p id="aErr" style="color:var(--badt);font-weight:800;min-height:22px;margin:12px 0 0">${esc(AUTH_MSG)}</p><button class="go" onclick="authSubmit('login')">Entrar</button><button onclick="forgotSubmit()" style="color:var(--blue);font-weight:800;margin-top:12px;width:100%">Esqueci minha senha</button><button class="go" style="margin-top:10px;background:var(--card);color:var(--tx);box-shadow:0 6px 0 var(--line);border:2px solid var(--line)" onclick="authSubmit('signup')">Criar conta</button></div><p class="intro" style="text-align:center;margin-top:16px"><a href="#" onclick="showPrivacy();return false;">Política de privacidade</a></p></main>`;
 }
 function proCard(){
   const isAdm=ME&&ME.role==="admin", pro=ME&&ME.plan==="pro";
@@ -752,6 +761,8 @@ boot();
 function render(){ refillHearts(); applyTheme();
   const app0=document.getElementById("app");
   if(!AUTH_READY){ app0.innerHTML="<main><p class='intro'>Carregando...</p></main>"; return; }
+  if(PRIVACY){ app0.innerHTML=privacyView(); return; }
+  if(RESET_TOKEN){ app0.innerHTML=resetView(); return; }
   if(!ME){ app0.innerHTML=authView(); return; }
   const app=document.getElementById("app");
   if(ST){ app.innerHTML=ST.out?outView():ST.asking?quesView():storyView(); return; }
