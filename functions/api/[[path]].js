@@ -51,7 +51,7 @@ async function authUser(env, req) {
   const u = await env.DB.prepare(
     "SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?"
   ).bind(t).first();
-  return u ? refresh(env.DB, u) : null;
+  return u && u.verified ? refresh(env.DB, u) : null;
 }
 async function newSession(env, userId) {
   const token = hex(crypto.getRandomValues(new Uint8Array(32)));
@@ -60,9 +60,40 @@ async function newSession(env, userId) {
 }
 
 // hearts: null = infinito (conta do administrador)
+const clientIp = (req) => req.headers.get("CF-Connecting-IP") || "anon";
+
+// Limite de tentativas: no máximo `max` ações por `windowSec` segundos para a mesma chave
+async function limited(env, key, max, windowSec) {
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.prepare("DELETE FROM attempts WHERE ts < ?").bind(now - 86400).run();
+  const row = await env.DB.prepare("SELECT COUNT(*) AS c FROM attempts WHERE key = ? AND ts > ?").bind(key, now - windowSec).first();
+  if (row.c >= max) return true;
+  await env.DB.prepare("INSERT INTO attempts (key, ts) VALUES (?, ?)").bind(key, now).run();
+  return false;
+}
+
+async function sendMail(env, to, name, subject, text) {
+  if (!env.BREVO_API_KEY) return;
+  const r = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: { "api-key": env.BREVO_API_KEY, "Content-Type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ sender: { name: env.APP_NAME, email: env.SENDER_EMAIL }, to: [{ email: to, name }], subject, textContent: text }),
+  });
+  if (!r.ok) console.error("Brevo:", r.status, await r.text());
+}
+
+async function makeToken(env, userId, kind, hours) {
+  const token = hex(crypto.getRandomValues(new Uint8Array(24)));
+  await env.DB.prepare("INSERT INTO tokens (token, user_id, kind, expires) VALUES (?, ?, ?, ?)")
+    .bind(token, userId, kind, Date.now() + hours * 3600e3).run();
+  return token;
+}
+
+const isUnlimited = (u) => u.role === "admin" || (u.plan === "pro" && (!u.pro_until || u.pro_until >= brasiliaDay()));
 const pub = (u) => ({
   id: u.id, name: u.name, email: u.email, role: u.role,
-  hearts: u.role === "admin" ? null : u.hearts,
+  plan: u.role === "admin" ? "admin" : (isUnlimited(u) ? "pro" : "free"),
+  hearts: isUnlimited(u) ? null : u.hearts,
 });
 const nextLesson = (p, l) => {
   const d = (p.done && p.done[l]) || [];
@@ -93,6 +124,7 @@ export async function onRequest({ request, env, waitUntil }) {
 
   try {
     if (route === "/api/signup" && method === "POST") {
+      if (await limited(env, "signup:" + clientIp(request), 5, 3600)) return json({ error: "Muitas tentativas. Tente de novo mais tarde." }, 429);
       const name = String(body.name || "").trim().slice(0, 60);
       const email = String(body.email || "").trim().toLowerCase();
       const password = String(body.password || "");
@@ -103,20 +135,66 @@ export async function onRequest({ request, env, waitUntil }) {
 
       const role = email === (env.ADMIN_EMAIL || "").toLowerCase() ? "admin" : "user";
       await env.DB.prepare(
-        "INSERT INTO users (name, email, pass_hash, role, hearts, hearts_day) VALUES (?, ?, ?, ?, ?, ?)"
-      ).bind(name, email, await hashPass(password), role, DAILY_HEARTS, brasiliaDay()).run();
+        "INSERT INTO users (name, email, pass_hash, role, hearts, hearts_day, last_active) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).bind(name, email, await hashPass(password), role, DAILY_HEARTS, brasiliaDay(), brasiliaDay()).run();
       const user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
 
-      waitUntil(welcome(env, email, name)); // o cadastro não espera o e-mail
-      return json(pub(user), 200, { "Set-Cookie": await newSession(env, user.id) });
+      const vt = await makeToken(env, user.id, "verify", 48);
+      waitUntil(sendMail(env, email, name, `${env.APP_NAME}: confirme seu e-mail`, `Olá, ${name}! Confirme seu e-mail para entrar no ${env.APP_NAME}:\n\n${env.APP_URL}/api/verify?token=${vt}`));
+      return json({ ok: true, verify: true });
     }
 
     if (route === "/api/login" && method === "POST") {
+      if (await limited(env, "login:" + clientIp(request), 10, 900)) return json({ error: "Muitas tentativas. Espere 15 minutos e tente de novo." }, 429);
       const email = String(body.email || "").trim().toLowerCase();
       const u = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
       if (!u || !(await checkPass(String(body.password || ""), u.pass_hash)))
         return json({ error: "E-mail ou senha incorretos" }, 401);
+      if (!u.verified) return json({ error: "Confirme seu e-mail antes de entrar. Veja a caixa de entrada e o spam." }, 403);
       return json(pub(await refresh(env.DB, u)), 200, { "Set-Cookie": await newSession(env, u.id) });
+    }
+
+    if (route === "/api/verify" && method === "GET") {
+      const tk = new URL(request.url).searchParams.get("token") || "";
+      const row = await env.DB.prepare("SELECT user_id FROM tokens WHERE token = ? AND kind = 'verify' AND expires > ?").bind(tk, Date.now()).first();
+      if (!row) return new Response("Link inválido ou expirado. Crie a conta de novo.", { status: 400 });
+      await env.DB.prepare("UPDATE users SET verified = 1 WHERE id = ?").bind(row.user_id).run();
+      await env.DB.prepare("DELETE FROM tokens WHERE token = ?").bind(tk).run();
+      return new Response(null, { status: 302, headers: { Location: `${env.APP_URL}/?verificado=1` } });
+    }
+
+    if (route === "/api/forgot" && method === "POST") {
+      const email = String(body.email || "").trim().toLowerCase();
+      if (await limited(env, "forgot:" + clientIp(request), 5, 3600)) return json({ error: "Muitas tentativas. Tente de novo mais tarde." }, 429);
+      const u = await env.DB.prepare("SELECT id, name FROM users WHERE email = ?").bind(email).first();
+      if (u) {
+        const t = await makeToken(env, u.id, "reset", 1);
+        await sendMail(env, email, u.name, `${env.APP_NAME}: redefinir senha`, `Olá, ${u.name}! Para criar uma nova senha, abra este link (válido por 1 hora):\n\n${env.APP_URL}/?reset=${t}\n\nSe não foi você, ignore este e-mail.`);
+      }
+      return json({ ok: true }); // responde igual existindo ou não o e-mail
+    }
+
+    if (route === "/api/reset" && method === "POST") {
+      if (await limited(env, "reset:" + clientIp(request), 10, 3600)) return json({ error: "Muitas tentativas. Tente de novo mais tarde." }, 429);
+      const password = String(body.password || "");
+      if (password.length < 6) return json({ error: "A senha precisa de 6 ou mais caracteres" }, 400);
+      const row = await env.DB.prepare("SELECT user_id FROM tokens WHERE token = ? AND kind = 'reset' AND expires > ?").bind(String(body.token || ""), Date.now()).first();
+      if (!row) return json({ error: "Link inválido ou expirado. Peça um novo." }, 400);
+      await env.DB.prepare("UPDATE users SET pass_hash = ? WHERE id = ?").bind(await hashPass(password), row.user_id).run();
+      await env.DB.prepare("DELETE FROM tokens WHERE user_id = ? AND kind = 'reset'").bind(row.user_id).run();
+      await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(row.user_id).run();
+      return json({ ok: true });
+    }
+
+    if (route === "/api/ranking" && method === "GET") {
+      const me = await authUser(env, request);
+      if (!me) return unauth();
+      const { results } = await env.DB.prepare("SELECT name, progress FROM users WHERE verified = 1").all();
+      const top = results
+        .map(r => ({ nome: r.name.split(" ")[0], xp: JSON.parse(r.progress || "{}").xp || 0 }))
+        .sort((a, b) => b.xp - a.xp)
+        .slice(0, 10);
+      return json(top);
     }
 
     if (route === "/api/logout" && method === "POST") {
@@ -136,14 +214,14 @@ export async function onRequest({ request, env, waitUntil }) {
       if (!me) return unauth();
       const data = JSON.stringify(body.progress || {});
       if (data.length > 200000) return json({ error: "Progresso grande demais" }, 413);
-      await env.DB.prepare("UPDATE users SET progress = ? WHERE id = ?").bind(data, me.id).run();
+      await env.DB.prepare("UPDATE users SET progress = ?, last_active = ?, reminder_stage = 0 WHERE id = ?").bind(data, brasiliaDay(), me.id).run();
       return json({ ok: true });
     }
 
     if (route === "/api/hearts/lose" && method === "POST") {
       const me = await authUser(env, request);
       if (!me) return unauth();
-      if (me.role === "admin") return json({ hearts: null });
+      if (isUnlimited(me)) return json({ hearts: null });
       const hearts = Math.max(0, me.hearts - 1);
       await env.DB.prepare("UPDATE users SET hearts = ? WHERE id = ?").bind(hearts, me.id).run();
       return json({ hearts });
@@ -169,9 +247,22 @@ export async function onRequest({ request, env, waitUntil }) {
       }));
     }
 
+    if (route === "/api/admin/plan" && method === "POST") {
+      const me = await authUser(env, request);
+      if (!me) return unauth();
+      if (me.role !== "admin") return json({ error: "Sem permissão" }, 403);
+      const email = String(body.email || "").trim().toLowerCase();
+      const plan = body.plan === "pro" ? "pro" : "free";
+      const until = plan === "pro" && body.days
+        ? new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(Date.now() + Number(body.days) * 864e5))
+        : null;
+      await env.DB.prepare("UPDATE users SET plan = ?, pro_until = ? WHERE email = ?").bind(plan, until, email).run();
+      return json({ ok: true });
+    }
+
     return json({ error: "Rota não encontrada" }, 404);
   } catch (e) {
     console.error(e);
     return json({ error: "Erro interno" }, 500);
   }
-          }
+        }
