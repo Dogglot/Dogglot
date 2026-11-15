@@ -139,7 +139,7 @@ function setLang(l){ S.lang=l; save(); render(); }
 function today(){ return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date()); }
 function refillHearts(){ if(ME) return; const t=today(); if(S.heartsDay!==t){ S.hearts=3; S.heartsDay=t; save(); } }
 function outView(){ return `<div id="lesson" class="center"><div class="big">💔</div><h2 class="res">Sem corações por hoje</h2><p style="color:var(--mut);font-weight:700">Suas 3 vidas voltam à meia-noite, no horário de Brasília.</p><button class="go" style="margin-top:24px" onclick="quit()">Voltar</button></div>`; }
-window.onerror=function(m){ const a=document.getElementById("app"); if(a) a.insertAdjacentHTML("afterbegin", `<div style="background:#fee;color:#900;padding:10px;font-size:13px">Erro: ${String(m)}</div>`); };
+window.onerror=function(m){ const a=document.getElementById("app"); if(a) a.insertAdjacentHTML("afterbegin", `<div style="background:#fee;color:#900;padding:10px;font-size:13px">Algo deu errado. Feche e abra o app de novo.</div>`); };
 const __errBox=function(m){ const a=document.getElementById("app"); if(a) a.insertAdjacentHTML("afterbegin", `<div style="background:#fee;color:#900;padding:10px;font-size:13px">Erro: ${esc(m)}</div>`); };
 function quit(){ CUR=null; ST=null; render(); }
 function reviewPairs(lang,n,W){
@@ -194,6 +194,90 @@ function pronScore(said,target){
   const a=norm(said), b=norm(target), max=Math.max(a.length,b.length)||1;
   return Math.max(0, Math.round((1-lev(a,b)/max)*100));
 }
+// Completar a frase: usa as frases das histórias, com a palavra faltando
+function clozeItems(lang,n){
+  const sts=STORIES[lang], st=sts[n%sts.length].l, line=st[n%st.length];
+  return [{mode:"mc", cloze:true, q:`Complete a frase: ${line[0]}`, opts:shuffle(line[2].slice()), ans:line[1]}];
+}
+// Mascote que reage ao acerto ou ao erro
+function mascot(fb){
+  if(!fb) return "";
+  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">${dogSVG(fb==="ok"?"estudante":"normal",56)}<span style="font-weight:800">${fb==="ok"?"Isso aí!":"Quase! Olhe a resposta certa."}</span></div>`;
+}
+// Ouvir a conversa inteira do diálogo
+function sayDialogCur(){
+  const C=CUR, w=C&&C.slides&&C.slides[C.si];
+  if(!w||!w.lines) return;
+  try{ speechSynthesis.cancel(); w.lines.forEach(([tg])=>{ const u=new SpeechSynthesisUtterance(tg); u.lang=BANKS[C.lang].voice; u.rate=.9; speechSynthesis.speak(u); }); }catch(e){}
+}
+// Imagem do progresso para compartilhar
+function shareCard(){
+  const c=document.createElement("canvas"); c.width=720; c.height=400;
+  const x=c.getContext("2d");
+  x.fillStyle="#fff8ec"; x.fillRect(0,0,720,400);
+  x.fillStyle="#1e1b2e"; x.font="bold 40px sans-serif"; x.fillText("Meu progresso no Dogglot",40,80);
+  x.fillStyle="#2fb86e"; x.font="bold 30px sans-serif";
+  x.fillText(`Lições: ${S.done.en.length+S.done.es.length}`,40,160);
+  x.fillText(`Sequência: ${S.streak} dia(s)`,40,215);
+  x.fillText(`XP: ${S.xp}`,40,270);
+  x.fillText(`Palavras aprendidas: ${learned("en").length+learned("es").length}`,40,325);
+  c.toBlob(async b=>{
+    const file=new File([b],"dogglot.png",{type:"image/png"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file],title:"Dogglot"}); }catch(e){}
+    } else {
+      const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download="dogglot.png"; a.click();
+    }
+  });
+}
+// Bloco da conta: compartilhar e apagar a conta (pede a senha)
+function accountCard(){
+  return `<div class="row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px"><b>Sua conta</b><button class="go" style="margin-top:4px" onclick="shareCard()">Compartilhar meu progresso</button><small>Para apagar sua conta, digite sua senha:</small><input id="delPass" class="txt" type="password" placeholder="Senha" style="margin-top:0"><button class="go" style="background:#c8402a;box-shadow:0 6px 0 #8f2c1d" onclick="deleteAccount()">Apagar minha conta</button></div>`;
+}
+async function deleteAccount(){
+  const inp=document.getElementById("delPass"), password=inp.value;
+  if(!password) return;
+  try{
+    const r=await fetch("/api/account/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password})});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); inp.value=""; inp.placeholder=d.error||"Não foi possível apagar"; return; }
+    try{ localStorage.removeItem(KEY); }catch(e){}
+    location.reload();
+  }catch(e){ inp.placeholder="Sem conexão com o servidor"; }
+}
+// Níveis de dificuldade: quais tipos de exercício aparecem em cada nível
+const PATTERN={iniciante:[0,1,3,0], intermediario:[0,1,2,3], avancado:[2,0,2,1]};
+const diffIs=(d)=>(S.diff||"intermediario")===d;
+function diffRow(){
+  const cur=S.diff||"intermediario", b=(k,l)=>`<button class="tab ${cur===k?"on":""}" onclick="setDiff('${k}')">${l}</button>`;
+  return `<div class="row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px"><b>Nível de dificuldade</b><div style="display:flex;gap:8px;flex-wrap:wrap">${b("iniciante","Iniciante")}${b("intermediario","Intermediário")}${b("avancado","Avançado")}</div><small>Iniciante: mais escolha de resposta. Avançado: mais digitação e frases.</small></div>`;
+}
+function setDiff(k){ S.diff=k; save(); render(); }
+
+// Revisão no fim da unidade: sorteia 7 palavras da própria unidade
+function unitSample(lang,n){ const u=Math.floor(n/10); const pool=UNITW[lang][u]||BANKS[lang].p; return shuffle(pool.slice()).slice(0,7); }
+
+// Metas semanais: a semana começa na segunda-feira, no horário de Brasília
+function weekStartStr(){ const d=new Date(today()+"T12:00:00-03:00"); const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow); return d.toISOString().slice(0,10); }
+function countWeek(C){
+  const ws=weekStartStr();
+  if(!S.week||S.week.start!==ws) S.week={start:ws,n:0,rewarded:false};
+  S.week.n++;
+  const goal=S.weekGoal||5;
+  if(S.week.n>=goal && !S.week.rewarded){ S.xp+=150; S.week.rewarded=true; C.weekBonus=true; }
+}
+function weekHTML(){
+  const ws=weekStartStr(), n=(S.week&&S.week.start===ws)?S.week.n:0, goal=S.weekGoal||5;
+  return `<p class="intro" style="margin:12px 0 0">Meta da semana: ${Math.min(n,goal)}/${goal} lições</p>`;
+}
+function setWeekGoal(g){ S.weekGoal=g; save(); render(); }
+function weekRow(){
+  const cur=S.weekGoal||5, b=(g)=>`<button class="tab ${cur===g?"on":""}" onclick="setWeekGoal(${g})">${g}</button>`;
+  return `<div class="row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px"><b>Meta semanal (lições)</b><div style="display:flex;gap:8px">${b(3)}${b(5)}${b(7)}</div><small>Ao cumprir a meta da semana, você ganha 150 XP.</small></div>`;
+}
+
+// Modo sem internet: o progresso fica no aparelho e é enviado quando a conexão voltar
+window.addEventListener("online",()=>{ if(ME) syncProgress(); });
+
 function setTheme(t){ S.theme=t; save(); render(); }
 function applyTheme(){ const t=S.theme; if(t&&t!=="auto") document.documentElement.setAttribute("data-theme",t); else document.documentElement.removeAttribute("data-theme"); }
 function themeRow(){
@@ -300,7 +384,11 @@ const UNITW={
   [["city","cidade"],["town","cidadezinha"],["street","rua"],["avenue","avenida"],["square","praça"],["block","quarteirão"],["corner","esquina"],["crossing","cruzamento"],["sidewalk","calçada"],["crosswalk","faixa de pedestres"],["bridge","ponte"],["tunnel","túnel"],["neighborhood","bairro"],["downtown","centro da cidade"],["suburb","subúrbio"],["building","prédio"],["apartment","apartamento"],["skyscraper","arranha-céu"],["monument","monumento"],["fountain","fonte"],["bench","banco de praça"],["streetlight","poste"],["sign","placa"],["entrance","entrada"],["address","endereço"]],
   [["place","lugar"],["park","parque"],["beach","praia"],["mountain","montanha"],["lake","lago"],["river","rio"],["forest","floresta"],["desert","deserto"],["island","ilha"],["farm","fazenda"],["village","vila"],["library","biblioteca"],["museum","museu"],["theater","teatro"],["cinema","cinema"],["church","igreja"],["temple","templo"],["stadium","estádio"],["gym","academia"],["zoo","zoológico"],["aquarium","aquário"],["market","mercado"],["bakery","padaria"],["pharmacy","farmácia"],["post office","correio"],["police station","delegacia"],["fire station","quartel dos bombeiros"],["hostel","albergue"],["castle","castelo"],["palace","palácio"],["ruins","ruínas"],["waterfall","cachoeira"],["cave","caverna"],["valley","vale"],["hill","colina"],["field","campo"],["campsite","acampamento"],["resort","resort"],["lighthouse","farol"],["harbor","porto"],["hotel","hotel"],["restaurant","restaurante"],["school","escola"],["hospital","hospital"],["bank","banco"],["cafe","cafeteria"],["bar","bar"],["house","casa"],["office","escritório"],["factory","fábrica"]],
   [["school","escola"],["student","estudante"],["teacher","professor"],["class","aula"],["lesson","lição"],["homework","lição de casa"],["test","teste"],["grade","nota"],["subject","matéria"],["math","matemática"],["science","ciência"],["history","história"],["geography","geografia"],["art","arte"],["music","música"],["physics","física"],["chemistry","química"],["biology","biologia"],["literature","literatura"],["notebook","caderno"],["pen","caneta"],["pencil","lápis"],["eraser","borracha"],["ruler","régua"],["backpack","mochila"],["desk","carteira"],["blackboard","quadro-negro"],["chalk","giz"],["principal","diretor"],["classmate","colega de classe"],["library","biblioteca"],["recess","recreio"],["graduation","formatura"],["diploma","diploma"],["certificate","certificado"],["university","universidade"],["college","faculdade"],["dictionary","dicionário"],["study","estudar"],["learn","aprender"],["explain","explicar"],["understand","entender"],["remember","lembrar"],["forget","esquecer"],["practice","praticar"],["review","revisar"],["pass","passar"],["fail","reprovar"],["score","pontuação"],["read","ler"]],
-  [["work","trabalho"],["job","emprego"],["office","escritório"],["employee","funcionário"],["boss","chefe"],["manager","gerente"],["coworker","colega de trabalho"],["interview","entrevista"],["resume","currículo"],["contract","contrato"],["overtime","hora extra"],["promotion","promoção"],["retire","aposentar-se"],["quit","pedir demissão"],["hire","contratar"],["fire","demitir"],["task","tarefa"],["deadline","prazo"],["project","projeto"],["report","relatório"],["email","e-mail"],["colleague","colega"],["workplace","local de trabalho"],["business","negócios"],["company","empresa"]]
+  [["work","trabalho"],["job","emprego"],["office","escritório"],["employee","funcionário"],["boss","chefe"],["manager","gerente"],["coworker","colega de trabalho"],["interview","entrevista"],["resume","currículo"],["contract","contrato"],["overtime","hora extra"],["promotion","promoção"],["retire","aposentar-se"],["quit","pedir demissão"],["hire","contratar"],["fire","demitir"],["task","tarefa"],["deadline","prazo"],["project","projeto"],["report","relatório"],["email","e-mail"],["colleague","colega"],["workplace","local de trabalho"],["business","negócios"],["company","empresa"]],
+  [["doctor","médico"],["nurse","enfermeiro"],["dentist","dentista"],["lawyer","advogado"],["judge","juiz"],["police officer","policial"],["firefighter","bombeiro"],["soldier","soldado"],["pilot","piloto"],["flight attendant","comissário de bordo"],["engineer","engenheiro"],["architect","arquiteto"],["programmer","programador"],["scientist","cientista"],["accountant","contador"],["banker","banqueiro"],["cook","cozinheiro"],["chef","chef de cozinha"],["farmer","agricultor"],["builder","pedreiro"],["mechanic","mecânico"],["electrician","eletricista"],["plumber","encanador"],["photographer","fotógrafo"],["journalist","jornalista"]],
+  [["animal","animal"],["pet","animal de estimação"],["dog","cachorro"],["cat","gato"],["bird","pássaro"],["fish","peixe"],["horse","cavalo"],["cow","vaca"],["pig","porco"],["sheep","ovelha"],["goat","cabra"],["chicken","galinha"],["duck","pato"],["rooster","galo"],["rabbit","coelho"],["mouse","rato"],["hamster","hamster"],["lion","leão"],["tiger","tigre"],["elephant","elefante"],["giraffe","girafa"],["zebra","zebra"],["monkey","macaco"],["bear","urso"],["wolf","lobo"],["fox","raposa"],["deer","veado"],["kangaroo","canguru"],["panda","panda"],["koala","coala"],["camel","camelo"],["snake","cobra"],["lizard","lagarto"],["frog","sapo"],["turtle","tartaruga"],["crocodile","crocodilo"],["shark","tubarão"],["whale","baleia"],["dolphin","golfinho"],["octopus","polvo"],["crab","caranguejo"],["jellyfish","água-viva"],["butterfly","borboleta"],["bee","abelha"],["ant","formiga"],["spider","aranha"],["mosquito","mosquito"],["owl","coruja"],["eagle","águia"],["parrot","papagaio"]],
+  [["nature","natureza"],["tree","árvore"],["flower","flor"],["grass","grama"],["leaf","folha"],["root","raiz"],["forest","floresta"],["mountain","montanha"],["hill","colina"],["valley","vale"],["river","rio"],["stream","riacho"],["pond","lagoa"],["waterfall","cachoeira"],["ocean","oceano"],["sea","mar"],["wave","onda"],["sand","areia"],["rock","pedra"],["soil","terra"],["mud","lama"],["cliff","penhasco"],["canyon","cânion"],["sky","céu"],["cloud","nuvem"],["star","estrela"],["planet","planeta"],["moon","lua"],["sun","sol"],["earth","terra"],["universe","universo"],["galaxy","galáxia"],["meadow","prado"],["jungle","selva"],["swamp","pântano"],["bush","arbusto"],["bamboo","bambu"],["cactus","cacto"],["palm tree","palmeira"],["pine tree","pinheiro"],["branch","galho"],["trunk","tronco"],["moss","musgo"],["mushroom","cogumelo"],["volcano","vulcão"],["lava","lava"],["glacier","geleira"],["reef","recife"],["lagoon","laguna"],["island","ilha"]],
+  [["trip","viagem"],["travel","viajar"],["journey","jornada"],["tour","passeio"],["guide","guia"],["passport","passaporte"],["visa","visto"],["suitcase","mala"],["souvenir","lembrança"],["camera","câmera"],["hotel reservation","reserva de hotel"],["check-in","check-in"],["check-out","check-out"],["room key","chave do quarto"],["abroad","no exterior"],["currency","moeda estrangeira"],["sightseeing","passeio turístico"],["beach trip","viagem à praia"],["reservation","reserva"],["flight","voo"],["seat","assento"],["boarding pass","cartão de embarque"],["gate","portão de embarque"],["baggage claim","retirada de bagagem"],["airline","companhia aérea"]]
  ],
  es:[
   [["hola","olá"],["buenos días","bom dia"],["buenas tardes","boa tarde"],["buenas noches","boa noite"],["adiós","tchau"],["hasta luego","até logo"],["hasta mañana","até amanhã"],["hasta pronto","até já"],["cómo estás","como você está"],["estoy bien","estou bem"],["gracias","obrigado"],["muchas gracias","muito obrigado"],["por favor","por favor"],["perdón","desculpe"],["disculpe","com licença"],["sí","sim"],["no","não"],["quizás","talvez"],["vale","tudo bem"],["bienvenido","bem-vindo"],["nos vemos","a gente se vê"],["encantado","prazer em conhecer"],["que tenga un buen día","tenha um bom dia"],["felicidades","parabéns"],["ayuda","ajuda"],["correcto","certo"],["incorrecto","errado"],["otra vez","de novo"],["más tarde","mais tarde"],["pronto","em breve"],["muy bien","muito bem"],["claro","claro"],["entiendo","eu entendo"],["no sé","não sei"],["espere","espere"],["pase","entre"],["cuídate","cuide-se"],["buena suerte","boa sorte"],["salud","saúde"],["disfruta","aproveite"],["hace mucho","faz tempo"],["señor","senhor"],["señora","senhora"],["mi amigo","meu amigo"],["querido","querido"],["hasta siempre","até sempre"],["buen trabajo","bom trabalho"],["mucho gusto","muito prazer"],["qué tal","tudo bem"],["hasta ya","até já"]],
@@ -328,7 +416,11 @@ const UNITW={
   [["ciudad","cidade"],["pueblo","cidadezinha"],["calle","rua"],["avenida","avenida"],["plaza","praça"],["cuadra","quarteirão"],["esquina","esquina"],["cruce","cruzamento"],["acera","calçada"],["paso de peatones","faixa de pedestres"],["puente","ponte"],["túnel","túnel"],["barrio","bairro"],["centro","centro da cidade"],["afueras","subúrbio"],["edificio","prédio"],["apartamento","apartamento"],["rascacielos","arranha-céu"],["monumento","monumento"],["fuente","fonte"],["banco de plaza","banco de praça"],["farola","poste"],["letrero","placa"],["entrada","entrada"],["salida","saída"]],
   [["lugar","lugar"],["parque","parque"],["playa","praia"],["montaña","montanha"],["lago","lago"],["río","rio"],["bosque","floresta"],["desierto","deserto"],["isla","ilha"],["granja","fazenda"],["pueblo","vila"],["biblioteca","biblioteca"],["museo","museu"],["teatro","teatro"],["cine","cinema"],["iglesia","igreja"],["templo","templo"],["estadio","estádio"],["gimnasio","academia"],["zoológico","zoológico"],["acuario","aquário"],["mercado","mercado"],["panadería","padaria"],["farmacia","farmácia"],["oficina de correos","correio"],["comisaría","delegacia"],["parque de bomberos","quartel dos bombeiros"],["albergue","albergue"],["castillo","castelo"],["palacio","palácio"],["ruinas","ruínas"],["cascada","cachoeira"],["cueva","caverna"],["valle","vale"],["colina","colina"],["campo","campo"],["camping","acampamento"],["complejo turístico","resort"],["faro","farol"],["puerto","porto"],["hotel","hotel"],["restaurante","restaurante"],["escuela","escola"],["hospital","hospital"],["banco","banco"],["cafetería","cafeteria"],["bar","bar"],["casa","casa"],["oficina","escritório"],["fábrica","fábrica"]],
   [["escuela","escola"],["estudiante","estudante"],["profesor","professor"],["clase","aula"],["lección","lição"],["deberes","lição de casa"],["examen","prova"],["nota","nota"],["asignatura","matéria"],["matemáticas","matemática"],["ciencias","ciência"],["historia","história"],["geografía","geografia"],["arte","arte"],["música","música"],["física","física"],["química","química"],["biología","biologia"],["literatura","literatura"],["cuaderno","caderno"],["bolígrafo","caneta"],["lápiz","lápis"],["goma","borracha"],["regla","régua"],["mochila","mochila"],["pupitre","carteira"],["pizarra","quadro-negro"],["tiza","giz"],["director","diretor"],["compañero de clase","colega de classe"],["biblioteca","biblioteca"],["horario","horário"],["recreo","recreio"],["graduación","formatura"],["diploma","diploma"],["certificado","certificado"],["universidad","universidade"],["facultad","faculdade"],["diccionario","dicionário"],["estudiar","estudar"],["aprender","aprender"],["leer","ler"],["escribir","escrever"],["explicar","explicar"],["entender","entender"],["recordar","lembrar"],["olvidar","esquecer"],["practicar","praticar"],["repasar","revisar"],["aprobar","passar"]],
-  [["trabajo","trabalho"],["empleo","emprego"],["oficina","escritório"],["empleado","funcionário"],["jefe","chefe"],["gerente","gerente"],["compañero de trabajo","colega de trabalho"],["entrevista","entrevista"],["currículum","currículo"],["contrato","contrato"],["horas extra","hora extra"],["ascenso","promoção"],["jubilarse","aposentar-se"],["renunciar","pedir demissão"],["contratar","contratar"],["despedir","demitir"],["tarea","tarefa"],["plazo","prazo"],["proyecto","projeto"],["informe","relatório"],["correo","e-mail"],["colega","colega"],["lugar de trabajo","local de trabalho"],["negocio","negócio"],["empresa","empresa"]]
+  [["trabajo","trabalho"],["empleo","emprego"],["oficina","escritório"],["empleado","funcionário"],["jefe","chefe"],["gerente","gerente"],["compañero de trabajo","colega de trabalho"],["entrevista","entrevista"],["currículum","currículo"],["contrato","contrato"],["horas extra","hora extra"],["ascenso","promoção"],["jubilarse","aposentar-se"],["renunciar","pedir demissão"],["contratar","contratar"],["despedir","demitir"],["tarea","tarefa"],["plazo","prazo"],["proyecto","projeto"],["informe","relatório"],["correo","e-mail"],["colega","colega"],["lugar de trabajo","local de trabalho"],["negocio","negócio"],["empresa","empresa"]],
+  [["médico","médico"],["enfermero","enfermeiro"],["dentista","dentista"],["abogado","advogado"],["juez","juiz"],["policía","policial"],["bombero","bombeiro"],["soldado","soldado"],["piloto","piloto"],["azafata","comissário de bordo"],["ingeniero","engenheiro"],["arquitecto","arquiteto"],["programador","programador"],["científico","cientista"],["contador","contador"],["banquero","banqueiro"],["cocinero","cozinheiro"],["chef","chef de cozinha"],["granjero","agricultor"],["albañil","pedreiro"],["mecánico","mecânico"],["electricista","eletricista"],["fontanero","encanador"],["fotógrafo","fotógrafo"],["periodista","jornalista"]],
+  [["animal","animal"],["mascota","animal de estimação"],["perro","cachorro"],["gato","gato"],["pájaro","pássaro"],["pez","peixe"],["caballo","cavalo"],["vaca","vaca"],["cerdo","porco"],["oveja","ovelha"],["cabra","cabra"],["gallina","galinha"],["pato","pato"],["gallo","galo"],["conejo","coelho"],["ratón","rato"],["hámster","hamster"],["león","leão"],["tigre","tigre"],["elefante","elefante"],["jirafa","girafa"],["cebra","zebra"],["mono","macaco"],["oso","urso"],["lobo","lobo"],["zorro","raposa"],["ciervo","veado"],["canguro","canguru"],["panda","panda"],["koala","coala"],["camello","camelo"],["serpiente","cobra"],["lagarto","lagarto"],["rana","sapo"],["tortuga","tartaruga"],["cocodrilo","crocodilo"],["tiburón","tubarão"],["ballena","baleia"],["delfín","golfinho"],["pulpo","polvo"],["cangrejo","caranguejo"],["medusa","água-viva"],["mariposa","borboleta"],["abeja","abelha"],["hormiga","formiga"],["araña","aranha"],["mosquito","mosquito"],["búho","coruja"],["águila","águia"],["loro","papagaio"]],
+  [["naturaleza","natureza"],["árbol","árvore"],["flor","flor"],["hierba","grama"],["hoja","folha"],["raíz","raiz"],["bosque","floresta"],["montaña","montanha"],["colina","colina"],["valle","vale"],["río","rio"],["arroyo","riacho"],["estanque","lagoa"],["cascada","cachoeira"],["océano","oceano"],["mar","mar"],["ola","onda"],["arena","areia"],["roca","pedra"],["piedra","pedra"],["tierra","terra"],["barro","lama"],["acantilado","penhasco"],["cañón","cânion"],["cielo","céu"],["nube","nuvem"],["estrella","estrela"],["planeta","planeta"],["luna","lua"],["sol","sol"],["universo","universo"],["galaxia","galáxia"],["prado","prado"],["selva","selva"],["pantano","pântano"],["arbusto","arbusto"],["bambú","bambu"],["cactus","cacto"],["palmera","palmeira"],["pino","pinheiro"],["semilla","semente"],["rama","galho"],["tronco","tronco"],["musgo","musgo"],["hongo","cogumelo"],["volcán","vulcão"],["lava","lava"],["glaciar","geleira"],["arrecife","recife"],["laguna","laguna"]],
+  [["viaje","viagem"],["viajar","viajar"],["excursión","excursão"],["recorrido","passeio"],["guía","guia"],["pasaporte","passaporte"],["visado","visto"],["maleta","mala"],["recuerdo","lembrança"],["cámara","câmera"],["reserva de hotel","reserva de hotel"],["registro de entrada","check-in"],["registro de salida","check-out"],["llave de la habitación","chave do quarto"],["extranjero","no exterior"],["moneda extranjera","moeda estrangeira"],["turismo","turismo"],["reserva","reserva"],["vuelo","voo"],["asiento","assento"],["tarjeta de embarque","cartão de embarque"],["puerta de embarque","portão de embarque"],["recogida de equipaje","retirada de bagagem"],["aerolínea","companhia aérea"],["playa","praia"]]
  ]
 };
 function gcd(a,b){ return b?gcd(b,a%b):a; }
@@ -345,7 +437,7 @@ function opts(pool,f,ans){ return shuffle([ans,...shuffle(pool.map(x=>x[f]).filt
 function makeItems(list,pool,lang){
   const nm=BANKS[lang].name.toLowerCase();
   return list.map(([t,pt],k)=>{
-    const m=k%4;
+    const m=PATTERN[S.diff||"intermediario"][k%4];
     if(m===0) return {mode:"mc", q:`Como se diz "${pt}" em ${nm}?`, opts:opts(pool,0,t), ans:t};
     if(m===1) return {mode:"mc", q:`O que significa "${t}"?`, opts:opts(pool,1,pt), ans:pt, spk:t};
     if(m===3) return {mode:"mc", q:"Ouça e escolha a palavra:", opts:opts(pool,0,t), ans:t, spk:t};
@@ -375,13 +467,13 @@ const DIALOGS={
 function slideCard(w,b){
   if(Array.isArray(w)) return `<div class="card"><b>${w[0]}</b><span>${w[1]}</span><div style="margin-top:18px"><button class="spk" aria-label="Ouvir" onclick="say('${w[0]}','${b.voice}')">🔊</button></div></div>`;
   if(w.k==="note") return `<div class="card"><small style="color:var(--blue);font-weight:900;font-size:16px">Gramática</small><b style="font-size:26px;margin-top:8px">${w.t}</b><span>${w.x}</span></div>`;
-  return `<div class="card" style="text-align:left"><small style="color:var(--blue);font-weight:900;font-size:16px">Diálogo</small>${w.lines.map(([tg,pt])=>`<div style="display:flex;gap:10px;align-items:center;margin:12px 0"><button class="spk" aria-label="Ouvir" style="width:38px;height:38px;font-size:16px;flex:none" onclick="say('${tg}','${b.voice}')">🔊</button><div><b style="font-size:19px;display:block">${tg}</b><span>${pt}</span></div></div>`).join("")}</div>`;
+  return `<div class="card" style="text-align:left"><small style="color:var(--blue);font-weight:900;font-size:16px">Diálogo</small><button onclick="sayDialogCur()" style="color:var(--blue);font-weight:800;margin:8px 0">🔊 Ouvir diálogo</button>${w.lines.map(([tg,pt])=>`<div style="display:flex;gap:10px;align-items:center;margin:12px 0"><button class="spk" aria-label="Ouvir" style="width:38px;height:38px;font-size:16px;flex:none" onclick="say('${tg}','${b.voice}')">🔊</button><div><b style="font-size:19px;display:block">${tg}</b><span>${pt}</span></div></div>`).join("")}</div>`;
 }
 function nextLesson(){ const C=CUR; if(!C||C.kind!=="lesson"||C.n>=499) return quit(); start(C.n+1); }
 function lessonSlides(lang,n,W){ return [{k:"note", ...NOTES[lang][n%6]}, ...W, {k:"dialog", lines:DIALOGS[lang][n%6]}]; }
 function start(n){ refillHearts(); if(S.hearts<=0){ CUR={kind:"lesson", n, lang:S.lang, out:true}; render(); return; }
-  const lang=S.lang, W=pairsOf(lang,n), rev=reviewPairs(lang,n,W), all=W.concat(rev);
-  CUR={kind:"lesson", n, lang, slides:lessonSlides(lang,n,W), si:0, phase:"slides", q:makeItems(all,all,lang).concat(orderItems(lang,n), speakItems(lang,n)), i:0, ok:0, lost:0, sel:null, fb:null, order:[]};
+  const lang=S.lang, isRev=n%10===9, W=isRev?unitSample(lang,n):pairsOf(lang,n), rev=isRev?[]:reviewPairs(lang,n,W), all=W.concat(rev);
+  CUR={kind:"lesson", n, lang, slides:isRev?[]:lessonSlides(lang,n,W), si:0, phase:isRev?"practice":"slides", q:makeItems(all,all,lang).concat(diffIs("iniciante")?[]:orderItems(lang,n), diffIs("iniciante")?[]:speakItems(lang,n), clozeItems(lang,n)), i:0, ok:0, lost:0, sel:null, fb:null, order:[]};
   render();
 }
 function startDictPractice(){ refillHearts(); if(S.hearts<=0){ CUR={kind:"dict", out:true, lang:S.lang}; render(); return; }
@@ -409,7 +501,7 @@ function act(){
   const ok= ex.mode==="speak" ? pronScore(v,ex.ans)>=80 : norm(v)===norm(ex.ans);
   C.fb=ok?"ok":"bad";
   if(ok){ C.ok++; S.xp+=10; say(ex.spk||ex.ans, BANKS[C.lang].voice); if(ex.mode!=="order" && S.weak && S.weak[C.lang]) S.weak[C.lang]=S.weak[C.lang].filter(t=>t!==(ex.spk||ex.ans)); }
-  else { C.lost++; loseHeart(); if(ex.mode!=="order"){ S.weak=S.weak||{en:[],es:[]}; const tg=ex.spk||ex.ans; S.weak[C.lang]=S.weak[C.lang]||[]; if(!S.weak[C.lang].includes(tg)) S.weak[C.lang].push(tg); } if(!ex.retry) C.q.push({...ex, retry:true}); }
+  else { C.lost++; loseHeart(); if(ex.mode!=="order" && !ex.cloze){ S.weak=S.weak||{en:[],es:[]}; const tg=ex.spk||ex.ans; S.weak[C.lang]=S.weak[C.lang]||[]; if(!S.weak[C.lang].includes(tg)) S.weak[C.lang].push(tg); } if(!ex.retry) C.q.push({...ex, retry:true}); }
   save(); render();
 }
 
@@ -417,19 +509,21 @@ function finish(){
   const C=CUR;
   if(C.kind==="lesson"){ const d=S.done[C.lang]; if(!d.includes(C.n)) d.push(C.n); }
   S.xp+=20; { const td=today(); S.dayCount=S.dayCount||{}; S.dayCount[td]=(S.dayCount[td]||0)+1; }
+  if(C.kind==="lesson") countWeek(C);
   const t=today(), y=dayStr(1);
   if(S.last!==t){ S.streak = S.last===y ? S.streak+1 : 1; S.last=t; }
+  if([7,30,100].includes(S.streak) && S.rewardStreak!==S.streak){ S.xp+=100; S.rewardStreak=S.streak; C.bonus=true; }
   C.end=true; save(); render();
 }
 
 function path(){
-  const lang=S.lang, done=S.done[lang]; let h=calHTML()+(S.goal?goalHTML():"")+continueHTML()+reviewHTML();
+  const lang=S.lang, done=S.done[lang]; let h=calHTML()+(S.goal?goalHTML():"")+weekHTML()+continueHTML()+reviewHTML();
   for(let u=0;u<50;u++){
     const c=done.filter(x=>x>=u*10 && x<u*10+10).length;
     h+=`<section class="unit"><h2>Unidade ${u+1} · ${THEMES[u]}</h2><p>${c}/10 lições</p><div style="height:8px;border-radius:6px;background:var(--line);margin-top:8px;overflow:hidden"><i style="display:block;height:100%;width:${c*10}%;background:var(--g)"></i></div></section><div class="path">`;
     for(let j=0;j<10;j++){
       const n=u*10+j, open=(n===0||done.includes(n-1)||n<=done.length), d=done.includes(n), off=Math.round(Math.sin(j*1.4)*64);
-      h+=`<button class="node ${d?"done":open?"":"lock"}" style="transform:translateX(${off}px)" aria-label="Lição ${n+1}" ${open?`onclick="start(${n})"`:`onclick="lockMsg()"`}>${d?"✓":n+1}</button>`;
+      h+=`<button class="node ${d?"done":open?"":"lock"}" style="transform:translateX(${off}px)" aria-label="Lição ${n+1}" ${open?`onclick="start(${n})"`:`onclick="lockMsg()"`}>${d?"✓":(j===9?"★":n+1)}</button>`;
     }
     h+="</div>";
   }
@@ -455,14 +549,14 @@ function practiceView(){
   const dis = !C.fb && ((ex.mode==="mc" && C.sel===null) || (ex.mode==="order" && !(C.order||[]).length) || (ex.mode==="speak" && !C.spoken && !C.micUnavailable)) ? "disabled" : "";
   return `<div id="lesson"><div class="top"><button class="x" aria-label="Sair" onclick="quit()">✕</button><div class="bar"><i style="width:${pct}%"></i></div></div>
     ${body}
-    <div class="foot ${C.fb==="ok"?"ok":C.fb==="bad"?"bad":""}"><div style="font-weight:900;margin-bottom:8px">❤️ ${S.hearts>=999?"∞":S.hearts}</div>${fb}<button class="go" ${dis} onclick="act()">${C.fb?"Continuar":"Verificar"}</button></div></div>`;
+    <div class="foot ${C.fb==="ok"?"ok":C.fb==="bad"?"bad":""}"><div style="font-weight:900;margin-bottom:8px">❤️ ${S.hearts>=999?"∞":S.hearts}</div>${mascot(C.fb)}${fb}<button class="go" ${dis} onclick="act()">${C.fb?"Continuar":"Verificar"}</button></div></div>`;
 }
 
 function endView(){
   const C=CUR, t=C.ok+C.lost, acc=t?Math.round(C.ok/t*100):0;
   return `<div id="lesson" class="center"><div class="big">🏆</div><h2 class="res">${C.kind==="lesson"?"Lição concluída!":"Prática concluída!"}</h2>
     <p style="color:var(--mut);font-weight:700">Acertos: ${C.ok}/${t} (${acc}%)</p>${S.hearts<=0?'<p style="color:var(--badt);font-weight:800">Sem corações por hoje. A próxima lição abre quando você voltar amanhã.</p>':""}
-    <p style="font-weight:900;color:#d89a00">+${C.ok*10+20} XP</p>
+    <p style="font-weight:900;color:#d89a00">+${C.ok*10+20} XP</p>${C.bonus?'<p style="font-weight:900;color:#2fb86e">Bônus de sequência: +100 XP!</p>':""}${C.weekBonus?'<p style="font-weight:900;color:#2fb86e">Meta da semana cumprida: +150 XP!</p>':""}
     <button class="go" style="margin-top:24px" onclick="quit()">Continuar</button>${C.kind==="lesson"?`<button class="tab" style="display:block;width:100%;max-width:520px;margin:12px auto 0;text-align:center" onclick="nextLesson()">Próxima lição</button>`:""}</div>`;
 }
 
@@ -550,11 +644,18 @@ function shell(){
 
 let ME=null, AUTH_READY=false, ADMIN=null, syncT=null, AUTH_MSG="", RESET_TOKEN=null, RANK=null;
 function defaultState(){ return {xp:0,streak:0,last:"",lang:"en",mode:"path",done:{en:[],es:[]},stories:{en:[],es:[]},hearts:3,heartsDay:"",weak:{en:[],es:[]},dayCount:{}}; }
-function syncProgress(){ clearTimeout(syncT); syncT=setTimeout(()=>{ fetch("/api/progress",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({progress:S})}).catch(()=>{}); },800); }
+function syncProgress(){
+  clearTimeout(syncT);
+  syncT=setTimeout(()=>{
+    fetch("/api/progress",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({progress:S})})
+      .then(r=>{ try{ if(r.ok) localStorage.removeItem("dogglot-dirty"); else localStorage.setItem("dogglot-dirty","1"); }catch(e){} })
+      .catch(()=>{ try{ localStorage.setItem("dogglot-dirty","1"); }catch(e){} });
+  },800);
+}
 async function loadMe(){
   const r=await fetch("/api/me");
   if(!r.ok){ ME=null; return false; }
-  const d=await r.json(); ME=d;
+  const d=await r.json(); ME=d; try{ localStorage.setItem("dogglot-me", JSON.stringify(d)); }catch(e){}
   S=Object.assign(defaultState(), d.progress||{}); S.hearts = d.hearts===null ? 999 : d.hearts;
   try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
   return true;
@@ -564,7 +665,7 @@ async function boot(){
   if(q.get("verificado")) AUTH_MSG="E-mail confirmado! Agora é só entrar.";
   if(q.get("reset")) RESET_TOKEN=q.get("reset");
   if(q.has("verificado")||q.has("reset")) history.replaceState(null,"",location.pathname);
-  try{ await loadMe(); }catch(e){ ME=null; }
+  try{ await loadMe(); if(localStorage.getItem("dogglot-dirty")) syncProgress(); }catch(e){ try{ ME=JSON.parse(localStorage.getItem("dogglot-me")); }catch(_){ ME=null; } }
   AUTH_READY=true; render();
 }
 async function authSubmit(mode){
@@ -580,6 +681,7 @@ async function authSubmit(mode){
 }
 async function logout(){
   try{ await fetch("/api/logout",{method:"POST"}); }catch(e){}
+  try{ localStorage.removeItem("dogglot-me"); localStorage.removeItem("dogglot-dirty"); }catch(e){}
   try{ localStorage.removeItem(KEY); }catch(e){}
   location.reload();
 }
@@ -618,7 +720,7 @@ function extrasCard(){
   const box="flex-direction:column;align-items:flex-start;gap:6px;margin-top:12px";
   return `<div class="row" style="${box}"><b>Conquistas</b>${ach.map(([n,ok])=>`<small>${ok?"✓":"🔒"} ${n}</small>`).join("")}</div>
   <div class="row" style="${box}"><b>Ranking (top 10)</b>${rank}</div>
-  ${themeRow()}<div class="row" style="${box}"><b>Lembrete diário</b><small>Receba uma notificação para não perder o hábito.</small><button class="go" style="margin-top:6px" onclick="enableNotif()">Ativar notificações</button></div>
+  ${themeRow()}${diffRow()}${weekRow()}${accountCard()}<div class="row" style="${box}"><b>Lembrete diário</b><small>Receba uma notificação para não perder o hábito.</small><button class="go" style="margin-top:6px" onclick="enableNotif()">Ativar notificações</button></div>
   <p class="intro" style="text-align:center"><a href="/privacidade.html">Política de privacidade</a></p>`;
 }
 function authView(){ if(RESET_TOKEN) return resetView();
