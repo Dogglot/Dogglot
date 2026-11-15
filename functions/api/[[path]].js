@@ -197,6 +197,16 @@ export async function onRequest({ request, env, waitUntil }) {
       return json(top);
     }
 
+    if (route === "/api/account/delete" && method === "POST") {
+      const me = await authUser(env, request);
+      if (!me) return unauth();
+      if (!(await checkPass(String(body.password || ""), me.pass_hash))) return json({ error: "Senha incorreta" }, 403);
+      await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(me.id).run();
+      await env.DB.prepare("DELETE FROM tokens WHERE user_id = ?").bind(me.id).run();
+      await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(me.id).run();
+      return json({ ok: true }, 200, { "Set-Cookie": "sid=; HttpOnly; Secure; Path=/; Max-Age=0" });
+    }
+
     if (route === "/api/logout" && method === "POST") {
       const t = tokenOf(request);
       if (t) await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(t).run();
@@ -265,4 +275,4 @@ export async function onRequest({ request, env, waitUntil }) {
     console.error(e);
     return json({ error: "Erro interno" }, 500);
   }
-        }
+      }
