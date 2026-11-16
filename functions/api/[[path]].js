@@ -51,7 +51,7 @@ async function authUser(env, req) {
   const u = await env.DB.prepare(
     "SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?"
   ).bind(t).first();
-  return u && u.verified ? updateLeague(env, await refresh(env.DB, u)) : null;
+  return u && u.verified ? updateLeague(env, await refresh(env.DB, u)).catch(() => u) : null;
 }
 async function newSession(env, userId) {
   const token = hex(crypto.getRandomValues(new Uint8Array(32)));
@@ -401,6 +401,6 @@ export async function onRequest({ request, env, waitUntil }) {
     return json({ error: "Rota não encontrada" }, 404);
   } catch (e) {
     console.error(e);
-    return json({ error: "Erro interno" }, 500);
+    return json({ error: "Erro interno: " + (e && e.message ? e.message : String(e)) }, 500);
   }
-        }
+    }
