@@ -51,7 +51,7 @@ async function authUser(env, req) {
   const u = await env.DB.prepare(
     "SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?"
   ).bind(t).first();
-  return u && u.verified ? refresh(env.DB, u) : null;
+  return u && u.verified ? updateLeague(env, await refresh(env.DB, u)) : null;
 }
 async function newSession(env, userId) {
   const token = hex(crypto.getRandomValues(new Uint8Array(32)));
@@ -85,10 +85,55 @@ async function makeToken(env, userId, kind, hours) {
   return token;
 }
 
+const dayPlus = (d) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(Date.now() + d * 864e5));
+const addDaysFrom = (day, d) => { const x = new Date(day + "T12:00:00-03:00"); x.setDate(x.getDate() + d); return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(x); };
+const PLANS = {
+  mensal: { price: 6, days: 30, title: "Dogglot Pro (mensal)" },
+  anual: { price: 50, days: 365, title: "Dogglot Pro (anual)" },
+};
+const MP = "https://api.mercadopago.com";
+const mpHeaders = (env) => ({ Authorization: `Bearer ${env.MP_ACCESS_TOKEN}`, "Content-Type": "application/json" });
+
+const rankOut = (me, all) => {
+  const pos = all.findIndex(r => r.id === me.id);
+  return json({
+    top: all.slice(0, 10).map(({ id, ...x }) => ({ ...x, voce: id === me.id })),
+    me: { pos: pos >= 0 ? pos + 1 : null, xp: pos >= 0 ? all[pos].xp : 0, league: me.league || "bronze" },
+  });
+};
+
+const weekStartDay = () => {
+  const hoje = brasiliaDay();
+  const dow = (new Date(hoje + "T12:00:00-03:00").getUTCDay() + 6) % 7;
+  return addDaysFrom(hoje, -dow);
+};
+const LEAGUES = ["bronze", "prata", "ouro", "diamante"];
+const PROMOTE = { bronze: 100, prata: 250, ouro: 500, diamante: Infinity };
+const RELEGATE = { bronze: -1, prata: 50, ouro: 150, diamante: 300 };
+const moveLeague = (cur, xp) => {
+  const i = LEAGUES.indexOf(cur);
+  if (xp >= PROMOTE[cur] && i < LEAGUES.length - 1) return LEAGUES[i + 1];
+  if (xp < RELEGATE[cur] && i > 0) return LEAGUES[i - 1];
+  return cur;
+};
+// Na primeira vez que a pessoa aparece numa nova semana, a liga é atualizada com base no XP da semana anterior
+async function updateLeague(env, u) {
+  const wk = weekStartDay();
+  if (u.league_week === wk) return u;
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(xp), 0) AS xp FROM xp_log WHERE user_id = ? AND day >= ? AND day <= ?")
+    .bind(u.id, addDaysFrom(wk, -7), addDaysFrom(wk, -1)).first();
+  const next = moveLeague(u.league || "bronze", (row && row.xp) || 0);
+  await env.DB.prepare("UPDATE users SET league = ?, league_week = ? WHERE id = ?").bind(next, wk, u.id).run();
+  u.league = next;
+  u.league_week = wk;
+  return u;
+}
+
 const isUnlimited = (u) => u.role === "admin" || (u.plan === "pro" && (!u.pro_until || u.pro_until >= brasiliaDay()));
 const pub = (u) => ({
   id: u.id, name: u.name, email: u.email, role: u.role,
   plan: u.role === "admin" ? "admin" : (isUnlimited(u) ? "pro" : "free"),
+  league: u.league || "bronze",
   hearts: isUnlimited(u) ? null : u.hearts,
 });
 const nextLesson = (p, l) => {
@@ -185,12 +230,20 @@ export async function onRequest({ request, env, waitUntil }) {
     if (route === "/api/ranking" && method === "GET") {
       const me = await authUser(env, request);
       if (!me) return unauth();
-      const { results } = await env.DB.prepare("SELECT name, progress FROM users WHERE verified = 1").all();
+      const period = new URL(request.url).searchParams.get("period") || "all";
+      if (period !== "all") {
+        const hoje = brasiliaDay(); const dow = (new Date(hoje + "T12:00:00-03:00").getUTCDay() + 6) % 7; const since = period === "week" ? addDaysFrom(hoje, -dow) : hoje.slice(0, 8) + "01";
+        const rs = await env.DB.prepare(
+          "SELECT u.id AS id, u.name AS name, SUM(x.xp) AS xp FROM xp_log x JOIN users u ON u.id = x.user_id WHERE x.day >= ? AND u.verified = 1 GROUP BY u.id ORDER BY xp DESC"
+        ).bind(since).all();
+        return rankOut(me, rs.results.map(r => ({ id: r.id, nome: String(r.name).split(" ")[0], xp: r.xp || 0 })));
+      }
+      const { results } = await env.DB.prepare("SELECT id, name, progress FROM users WHERE verified = 1").all();
       const top = results
-        .map(r => ({ nome: r.name.split(" ")[0], xp: JSON.parse(r.progress || "{}").xp || 0 }))
+        .map(r => ({ id: r.id, nome: r.name.split(" ")[0], xp: JSON.parse(r.progress || "{}").xp || 0 }))
         .sort((a, b) => b.xp - a.xp)
-        .slice(0, 10);
-      return json(top);
+        ;
+      return rankOut(me, top);
     }
 
     if (route === "/api/account/delete" && method === "POST") {
@@ -201,6 +254,79 @@ export async function onRequest({ request, env, waitUntil }) {
       await env.DB.prepare("DELETE FROM tokens WHERE user_id = ?").bind(me.id).run();
       await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(me.id).run();
       return json({ ok: true }, 200, { "Set-Cookie": "sid=; HttpOnly; Secure; Path=/; Max-Age=0" });
+    }
+
+    if (route === "/api/trial" && method === "POST") {
+      const me = await authUser(env, request);
+      if (!me) return unauth();
+      if (me.trial_used) return json({ error: "Você já usou o teste grátis." }, 400);
+      await env.DB.prepare("UPDATE users SET plan = 'pro', pro_until = ?, trial_used = 1 WHERE id = ?").bind(dayPlus(7), me.id).run();
+      return json({ ok: true });
+    }
+
+    if (route === "/api/pay/pix" && method === "POST") {
+      const me = await authUser(env, request);
+      if (!me) return unauth();
+      const plan = PLANS[body.plan];
+      if (!plan) return json({ error: "Plano inválido" }, 400);
+      const cpf = String(body.cpf || "").replace(/\D/g, "");
+      if (cpf.length !== 11) return json({ error: "Digite um CPF válido, com 11 números" }, 400);
+      const r = await fetch(`${MP}/v1/payments`, {
+        method: "POST",
+        headers: { ...mpHeaders(env), "X-Idempotency-Key": hex(crypto.getRandomValues(new Uint8Array(16))) },
+        body: JSON.stringify({
+          transaction_amount: plan.price,
+          description: plan.title,
+          payment_method_id: "pix",
+          payer: { email: me.email, identification: { type: "CPF", number: cpf } },
+          external_reference: `${me.id}|${plan.days}`,
+          notification_url: `${env.APP_URL}/api/pay/webhook`,
+        }),
+      });
+      const p = await r.json().catch(() => ({}));
+      if (!r.ok) { console.error("MP pix:", r.status, JSON.stringify(p)); return json({ error: "Não foi possível gerar o Pix agora. Tente de novo." }, 502); }
+      const tx = (p.point_of_interaction && p.point_of_interaction.transaction_data) || {};
+      return json({ id: p.id, code: tx.qr_code || "", img: tx.qr_code_base64 || "" });
+    }
+
+    if (route === "/api/pay/card" && method === "POST") {
+      const me = await authUser(env, request);
+      if (!me) return unauth();
+      const plan = PLANS[body.plan];
+      if (!plan) return json({ error: "Plano inválido" }, 400);
+      const r = await fetch(`${MP}/checkout/preferences`, {
+        method: "POST",
+        headers: mpHeaders(env),
+        body: JSON.stringify({
+          items: [{ title: plan.title, quantity: 1, unit_price: plan.price, currency_id: "BRL" }],
+          external_reference: `${me.id}|${plan.days}`,
+          notification_url: `${env.APP_URL}/api/pay/webhook`,
+          back_urls: { success: `${env.APP_URL}/`, pending: `${env.APP_URL}/`, failure: `${env.APP_URL}/` },
+          auto_return: "approved",
+        }),
+      });
+      const p = await r.json().catch(() => ({}));
+      if (!r.ok || !p.init_point) { console.error("MP card:", r.status, JSON.stringify(p)); return json({ error: "Não foi possível abrir o pagamento agora." }, 502); }
+      return json({ init_point: p.init_point });
+    }
+
+    if (route === "/api/pay/webhook" && method === "POST") {
+      const url = new URL(request.url);
+      const id = (body.data && body.data.id) || url.searchParams.get("data.id") || url.searchParams.get("id");
+      if (!id) return json({ ok: true });
+      // evita liberar o Pro duas vezes para o mesmo pagamento
+      if (await env.DB.prepare("SELECT 1 FROM payments WHERE id = ?").bind(String(id)).first()) return json({ ok: true });
+      const r = await fetch(`${MP}/v1/payments/${id}`, { headers: mpHeaders(env) });
+      const p = await r.json().catch(() => ({}));
+      if (!r.ok || p.status !== "approved") return json({ ok: true });
+      const [uid, days] = String(p.external_reference || "").split("|");
+      const user = await env.DB.prepare("SELECT plan, pro_until FROM users WHERE id = ?").bind(Number(uid)).first();
+      if (!user) return json({ ok: true });
+      // se já for Pro, soma os dias a partir do fim atual
+      const base = user.plan === "pro" && user.pro_until && user.pro_until > brasiliaDay() ? user.pro_until : brasiliaDay();
+      await env.DB.prepare("UPDATE users SET plan = 'pro', pro_until = ? WHERE id = ?").bind(addDaysFrom(base, Number(days)), Number(uid)).run();
+      await env.DB.prepare("INSERT INTO payments (id) VALUES (?)").bind(String(id)).run();
+      return json({ ok: true });
     }
 
     if (route === "/api/logout" && method === "POST") {
@@ -221,6 +347,12 @@ export async function onRequest({ request, env, waitUntil }) {
       const data = JSON.stringify(body.progress || {});
       if (data.length > 200000) return json({ error: "Progresso grande demais" }, 413);
       await env.DB.prepare("UPDATE users SET progress = ?, last_active = ?, reminder_stage = 0 WHERE id = ?").bind(data, brasiliaDay(), me.id).run();
+      const xpNow = Number((body.progress || {}).xp) || 0;
+      const delta = me.xp_seen === 0 ? 0 : xpNow - me.xp_seen;
+      if (delta > 0) {
+        await env.DB.prepare("INSERT INTO xp_log (user_id, day, xp) VALUES (?, ?, ?) ON CONFLICT(user_id, day) DO UPDATE SET xp = xp + excluded.xp").bind(me.id, brasiliaDay(), delta).run();
+      }
+      await env.DB.prepare("UPDATE users SET xp_seen = ? WHERE id = ?").bind(xpNow, me.id).run();
       return json({ ok: true });
     }
 
@@ -271,4 +403,4 @@ export async function onRequest({ request, env, waitUntil }) {
     console.error(e);
     return json({ error: "Erro interno" }, 500);
   }
-                                                                             }
+        }
