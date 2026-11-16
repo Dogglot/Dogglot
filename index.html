@@ -138,7 +138,7 @@ function norm(s){ return String(s).toLowerCase().normalize("NFD").replace(/[\u03
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 function say(t,v){ if(S.mute) return; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.lang=v; u.rate=.9; speechSynthesis.speak(u); }catch(e){} }
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-function setMode(m){ S.mode=m; save(); render(); }
+function setMode(m){ S.mode=m; if(m==="ranking") RANK_CACHE={}; save(); render(); }
 function setLang(l){ S.lang=l; save(); render(); }
 function today(){ return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date()); }
 function refillHearts(){ if(ME) return; const t=today(); if(S.heartsDay!==t){ S.hearts=3; S.heartsDay=t; save(); } }
@@ -308,8 +308,126 @@ function showPrivacy(){ PRIVACY=true; render(); }
 const tk=(s)=>norm(s).replace(/[¿¡]/g,"");
 function bottomNav(){
   const m=S.mode||"path";
-  const items=[["path","Lições","📘"],["stories","Histórias","📖"],["dict","Dicionário","🔤"],["profile","Perfil","👤"]];
+  const items=[["path","Lições","📘"],["stories","Histórias","📖"],["ranking","Ranking","🏆"],["dict","Dicionário","🔤"],["profile","Perfil","👤"]];
   return `<nav class="bnav">${items.map(([k,l,i])=>`<button class="${m===k?"on":""}" onclick="setMode('${k}')"><span style="font-size:20px;display:block">${i}</span>${l}</button>`).join("")}</nav>`;
+}
+let RANK_P="week", RANK_CACHE={}, PIX=null, PAY_MSG="";
+function setRankP(k){ RANK_P=k; render(); }
+function leagueOf(xp){
+  if(xp>=700) return ["Diamante","💎"];
+  if(xp>=300) return ["Ouro","🥇"];
+  if(xp>=100) return ["Prata","🥈"];
+  return ["Bronze","🥉"];
+}
+function rankingView(){
+  const p=RANK_P, data=RANK_CACHE[p];
+  if(!data){
+    ensureRank(p);
+  }
+  const tabs=[["week","Semana"],["month","Mês"],["all","Todo período"]].map(([k,l])=>`<button class="tab ${p===k?"on":""}" onclick="setRankP('${k}')">${l}</button>`).join("");
+  let body="<p class='intro'>Carregando...</p>";
+  if(data){
+    const me=data.me||{}, lg=[LG_NAME[me.league||"bronze"], LG_ICON[me.league||"bronze"]];
+    const mine=me.pos
+      ? `<div class="card" style="text-align:left"><b>Você está em ${me.pos}º lugar</b><span>${me.xp||0} XP neste período · liga ${lg[0]} ${lg[1]}</span></div>`
+      : `<div class="card" style="text-align:left"><b>Você ainda não pontuou neste período</b><span>Estude uma lição para entrar no ranking.</span></div>`;
+    const list=(data.top||[]).length
+      ? data.top.map((x,i)=>`<div class="row" style="${x.voce?"border-color:var(--blue)":""}"><b>${i+1}</b><span style="flex:1">${esc(x.nome)}${x.voce?" (você)":""}</span><b>${x.xp} XP</b></div>`).join("")
+      : "<p class='intro'>Ainda não há pontos neste período.</p>";
+    body=mine+list;
+  }
+  return `<main>${alertBox()}<h2 class="res" style="margin-top:12px">Ranking de XP</h2><div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px">${tabs}<button class="tab" onclick="RANK_CACHE={};render()">Atualizar</button></div>${body}<p class="intro" style="font-size:13px">As ligas mudam toda segunda-feira. Quem faz XP suficiente na semana anterior sobe de liga, e quem faz pouco desce.</p></main>`;
+}
+function rankingViewOld(){
+  const p=RANK_P, data=RANK_CACHE[p];
+  if(!data){
+    fetch("/api/ranking?period="+p).then(r=>r.ok?r.json():[]).then(d=>{ RANK_CACHE[p]=d; render(); }).catch(()=>{ RANK_CACHE[p]=[]; render(); });
+  }
+  const tabs=[["week","Semana"],["month","Mês"],["all","Todo período"]].map(([k,l])=>`<button class="tab ${p===k?"on":""}" onclick="setRankP('${k}')">${l}</button>`).join("");
+  const list=!data?"<p class='intro'>Carregando...</p>":data.length?data.map((x,i)=>`<div class="row"><b>${i+1}</b><span style="flex:1">${esc(x.nome)}</span><b>${x.xp} XP</b></div>`).join(""):"<p class='intro'>Ainda não há pontos neste período.</p>";
+  return `<main><h2 class="res" style="margin-top:12px">Ranking</h2><div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px">${tabs}<button class="tab" onclick="RANK_CACHE={};render()">Atualizar</button></div>${list}</main>`;
+}
+function pixView(){
+  return `<div style="text-align:center;width:100%"><p class="intro">Escaneie o QR Code no app do seu banco, ou copie o código abaixo:</p><img src="data:image/png;base64,${PIX.img}" alt="QR Code Pix" style="width:220px;max-width:100%"><textarea class="txt" readonly style="font-size:12px;height:90px">${esc(PIX.code)}</textarea><button class="go" style="margin-top:8px" onclick="checkPaid()">Já paguei</button><button onclick="PIX=null;PAY_MSG='';render()" style="margin-top:8px;color:var(--blue);font-weight:800">Cancelar</button></div>`;
+}
+function planButtons(){
+  if(ME&&(ME.plan==="pro"||ME.role==="admin")) return "<small>Você já tem o Pro. Obrigado!</small>";
+  if(PIX) return pixView();
+  const alt="flex:1;min-width:140px;background:var(--card);color:var(--tx);box-shadow:0 6px 0 var(--line);border:2px solid var(--line)";
+  return `<button class="go" style="margin-top:6px" onclick="startTrial()">Testar 7 dias grátis</button>
+    <input id="cpf" class="txt" inputmode="numeric" placeholder="CPF (só para pagar com Pix)" style="margin-top:8px">
+    <div style="display:flex;gap:8px;width:100%;flex-wrap:wrap"><button class="go" style="flex:1;min-width:140px" onclick="payPix('mensal')">Pix mensal R$ 6</button><button class="go" style="flex:1;min-width:140px" onclick="payPix('anual')">Pix anual R$ 50</button></div>
+    <div style="display:flex;gap:8px;width:100%;flex-wrap:wrap"><button class="go" style="${alt}" onclick="payCard('mensal')">Cartão mensal R$ 6</button><button class="go" style="${alt}" onclick="payCard('anual')">Cartão anual R$ 50</button></div>
+    <p class="intro" style="color:var(--badt)">${esc(PAY_MSG)}</p>`;
+}
+async function startTrial(){
+  PAY_MSG="";
+  try{
+    const r=await fetch("/api/trial",{method:"POST"});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ PAY_MSG=d.error||"Não foi possível começar o teste."; render(); return; }
+    await loadMe(); PAY_MSG="Teste grátis ativado! Você tem 7 dias de Pro."; render();
+  }catch(e){ PAY_MSG="Sem conexão com o servidor."; render(); }
+}
+async function payPix(plan){
+  PAY_MSG="";
+  const cpf=(document.getElementById("cpf")||{}).value||"";
+  try{
+    const r=await fetch("/api/pay/pix",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan,cpf})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ PAY_MSG=d.error||"Não foi possível gerar o Pix."; render(); return; }
+    PIX=d; render();
+  }catch(e){ PAY_MSG="Sem conexão com o servidor."; render(); }
+}
+async function payCard(plan){
+  PAY_MSG="";
+  try{
+    const r=await fetch("/api/pay/card",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok||!d.init_point){ PAY_MSG=d.error||"Não foi possível abrir o pagamento."; render(); return; }
+    location.href=d.init_point;
+  }catch(e){ PAY_MSG="Sem conexão com o servidor."; render(); }
+}
+async function checkPaid(){
+  try{ await loadMe(); }catch(e){}
+  if(ME&&ME.plan==="pro"){ PIX=null; PAY_MSG="Pagamento confirmado. Bem-vindo ao Pro!"; }
+  else { PAY_MSG="Ainda não recebemos o pagamento. Tente de novo em alguns segundos."; }
+  render();
+}
+const LG_ORDER=["bronze","prata","ouro","diamante"];
+const LG_NAME={bronze:"Bronze",prata:"Prata",ouro:"Ouro",diamante:"Diamante"};
+const LG_ICON={bronze:"🥉",prata:"🥈",ouro:"🥇",diamante:"💎"};
+let RANK_LOADING={};
+// Busca o ranking uma vez (evita pedir de novo a cada tela)
+function ensureRank(p){
+  if(RANK_CACHE[p]||RANK_LOADING[p]) return;
+  RANK_LOADING[p]=true;
+  fetch("/api/ranking?period="+p).then(r=>r.ok?r.json():{top:[],me:{}})
+    .then(d=>{ RANK_CACHE[p]=d; RANK_LOADING[p]=false; if(p==="week") checkRankChange(d); render(); })
+    .catch(()=>{ RANK_CACHE[p]={top:[],me:{}}; RANK_LOADING[p]=false; render(); });
+}
+// Compara com a última vez: se alguém passou a pessoa no ranking semanal, guarda o aviso
+function checkRankChange(d){
+  const me=d.me||{}, top=d.top||[];
+  const idx=top.findIndex(x=>x.voce);
+  const above=idx>0?top.slice(0,idx).map(x=>x.nome):[];
+  const prev=S.rankSeen;
+  if(prev && prev.pos && me.pos && me.pos>prev.pos){
+    const passers=above.filter(n=>!prev.above.includes(n));
+    S.rankAlert = passers.length ? `${passers.join(", ")} passou você!` : `Você caiu para o ${me.pos}º lugar.`;
+  }
+  S.rankSeen={pos:me.pos||null, above};
+  save();
+}
+function clearAlert(){ S.rankAlert=""; save(); render(); }
+function alertBox(){
+  return S.rankAlert ? `<div class="card" style="text-align:left;border-color:var(--blue)"><b>🔔 ${esc(S.rankAlert)}</b><button onclick="clearAlert()" style="color:var(--blue);font-weight:800;margin-top:6px">Entendi</button></div>` : "";
+}
+// Resumo no topo do caminho de lições
+function summaryHTML(){
+  ensureRank("week");
+  const d=RANK_CACHE.week||{}, me=d.me||{}, lg=me.league||(ME&&ME.league)||"bronze";
+  return `<div class="card" style="text-align:left;margin-top:12px"><b>Esta semana</b><span>${me.xp||0} XP · ${me.pos?me.pos+"º no ranking":"sem pontos ainda"} · Liga ${LG_NAME[lg]} ${LG_ICON[lg]}</span></div>${alertBox()}`;
 }
 function setTheme(t){ S.theme=t; save(); render(); }
 function applyTheme(){ const t=S.theme; if(t&&t!=="auto") document.documentElement.setAttribute("data-theme",t); else document.documentElement.removeAttribute("data-theme"); }
@@ -550,7 +668,7 @@ function finish(){
 }
 
 function path(){
-  const lang=S.lang, done=S.done[lang]; let h=calHTML()+(S.goal?goalHTML():"")+weekHTML()+continueHTML()+reviewHTML();
+  const lang=S.lang, done=S.done[lang]; let h=summaryHTML()+calHTML()+(S.goal?goalHTML():"")+weekHTML()+continueHTML()+reviewHTML();
   for(let u=0;u<50;u++){
     const c=done.filter(x=>x>=u*10 && x<u*10+10).length;
     h+=`<section class="unit"><h2>Unidade ${u+1} · ${THEMES[u]}</h2><p>${c}/10 lições</p><div style="height:8px;border-radius:6px;background:var(--line);margin-top:8px;overflow:hidden"><i style="display:block;height:100%;width:${c*10}%;background:var(--g)"></i></div></section><div class="path">`;
@@ -689,7 +807,13 @@ async function loadMe(){
   const r=await fetch("/api/me");
   if(!r.ok){ ME=null; return false; }
   const d=await r.json(); ME=d; try{ localStorage.setItem("dogglot-me", JSON.stringify(d)); }catch(e){}
+  const prevLg=S.lastLeague;
   S=Object.assign(defaultState(), d.progress||{}); S.hearts = d.hearts===null ? 999 : d.hearts;
+  if(prevLg && d.league && d.league!==prevLg){
+    const up=LG_ORDER.indexOf(d.league)>LG_ORDER.indexOf(prevLg);
+    S.rankAlert = up ? `Parabéns! Você subiu para a liga ${LG_NAME[d.league]}.` : `Você caiu para a liga ${LG_NAME[d.league]}. Continue estudando para voltar!`;
+  }
+  S.lastLeague=d.league||prevLg;
   try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
   return true;
 }
@@ -748,7 +872,7 @@ function enableNotif(){
 function extrasCard(){
   const total=S.done.en.length+S.done.es.length, words=learned("en").length+learned("es").length, hist=S.stories.en.length+S.stories.es.length;
   const ach=[["Primeira lição",total>=1],["5 lições",total>=5],["20 lições",total>=20],["Sequência de 7 dias",S.streak>=7],["Primeira história",hist>=1],["10 histórias",hist>=10],["100 palavras aprendidas",words>=100],["500 XP",S.xp>=500]];
-  if(RANK===null){ fetch("/api/ranking").then(r=>r.ok?r.json():[]).then(d=>{ RANK=d; render(); }).catch(()=>{ RANK=[]; render(); }); }
+  if(RANK===null){ fetch("/api/ranking").then(r=>r.ok?r.json():{top:[]}).then(d=>{ RANK=(d&&d.top)||[]; render(); }).catch(()=>{ RANK=[]; render(); }); }
   const rank=RANK===null?"<small>Carregando ranking...</small>":RANK.length?RANK.map((p,i)=>`<small>${i+1}. ${esc(p.nome)} · ${p.xp} XP</small>`).join("<br>"):"<small>Sem dados ainda.</small>";
   const box="flex-direction:column;align-items:flex-start;gap:6px;margin-top:12px";
   return `<div class="row" style="${box}"><b>Conquistas</b>${ach.map(([n,ok])=>`<small>${ok?"✓":"🔒"} ${n}</small>`).join("")}</div>
@@ -762,7 +886,7 @@ function authView(){ if(RESET_TOKEN) return resetView();
 function proCard(){
   const isAdm=ME&&ME.role==="admin", pro=ME&&ME.plan==="pro";
   const label=isAdm?"Administrador":pro?"Pro":"Grátis";
-  return `<div class="row" style="flex-direction:column;align-items:flex-start;gap:6px;margin-top:12px"><b>Plano: ${label}</b><small>Pro: R$ 6 por mês ou R$ 50 por ano. Corações ilimitados e lembretes.</small><button class="go" style="margin-top:6px" disabled>Assinar (em breve)</button></div>`;
+  return `<div class="row" style="flex-direction:column;align-items:flex-start;gap:6px;margin-top:12px"><b>Plano: ${label}</b><small>Pro: R$ 6 por mês ou R$ 50 por ano. Corações ilimitados e lembretes.</small>${planButtons()}</div>`;
 }
 async function grantPro(email){
   const r=await fetch("/api/admin/plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,plan:"pro",days:30})});
@@ -799,7 +923,7 @@ function render(){ refillHearts(); applyTheme();
   const m=S.mode||"path";
   const body = !S.welcomed ? welcomeView() : (S.goal===undefined||S.lvEs===undefined) ? onboardView() : m==="stories" ? `<main><p class="intro">Complete as frases com a palavra certa.</p>${storiesView()}</main>`
              : m==="chat" ? chatView()
-             : m==="admin" ? adminView() : m==="profile" ? profileView() : m==="dict" ? dictView()
+             : m==="admin" ? adminView() : m==="ranking" ? rankingView() : m==="profile" ? profileView() : m==="dict" ? dictView()
              : `<main>${path()}</main>`;
   app.innerHTML = shell() + body + (S.welcomed&&S.goal!==undefined&&S.lvEs!==undefined ? bottomNav() : "");
 }
