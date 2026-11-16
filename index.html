@@ -72,6 +72,10 @@ input#search{width:100%;padding:12px 14px;border-radius:14px;border:2px solid va
 .bub.assistant{align-self:flex-start;background:var(--card);border:2px solid var(--line)}
 .cbar{display:flex;gap:10px;align-items:center;position:sticky;bottom:0;background:var(--bg);padding:10px 0 14px}
 .cbar .txt{flex:1;margin:0}
+.bnav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:2px solid var(--line);z-index:6;padding-bottom:env(safe-area-inset-bottom,0px)}
+.bnav button{flex:1;padding:8px 0;font-weight:800;font-size:12px;color:var(--mut);background:none;border:0;cursor:pointer}
+.bnav button.on{color:var(--gd)}
+main{padding-bottom:110px}
 </style>
 </head>
 <body>
@@ -149,15 +153,29 @@ function reviewPairs(lang,n,W){
 }
 function storySents(lang){ return STORIES[lang].flatMap(s=>s.l.map(l=>[l[0].replace("___",l[1]), l[3]])); }
 function orderItems(lang,n){
-  const L=(n%2?DIALOGS[lang].flat():storySents(lang)); if(!L.length) return [];
+  const allowed=new Set([...learned(lang), ...pairsOf(lang,n)].flatMap(p=>p[0].split(" ").map(tk)));
+  const L=(n%2?DIALOGS[lang].flat():storySents(lang)).filter(([tg])=>tg.split(" ").every(w=>allowed.has(tk(w))));
+  if(!L.length) return [];
   const [tg,pt]=L[(n*7)%L.length], words=tg.split(" ");
-  return [{mode:"order", pt, words, ans:words.join(" ")}];
+  const sentTk=new Set(words.map(tk));
+  const dpool=[...new Set([...learned(lang), ...pairsOf(lang,n)].map(p=>p[0]).filter(t=>!t.includes(" ")))].filter(t=>!sentTk.has(tk(t)));
+  const nExtra=words.length<=4?4+Math.floor(Math.random()*2):3;
+  const extra=shuffle(dpool).slice(0,nExtra);
+  const items=words.map((w,i)=>({w,i})).concat(extra.map(w=>({w,i:-1})));
+  let arr, tries=0;
+  do{
+    arr=shuffle(items.slice());
+    const cor=arr.filter(x=>x.i>=0).map(x=>x.i);
+    tries++;
+    if(!cor.every((v,k)=>v===k)) break;
+  }while(tries<50);
+  return [{mode:"order", pt, words:arr.map(x=>x.w), ans:words.join(" ")}];
 }
 function orderPick(i){ if(CUR && !CUR.fb){ CUR.order=(CUR.order||[]).concat(i); render(); } }
 function orderUndo(j){ if(CUR && !CUR.fb){ CUR.order=(CUR.order||[]).filter((_,k)=>k!==j); render(); } }
 function orderBody(ex,C){
   const picked=C.order||[];
-  return `<div class="card" style="text-align:left"><small style="color:var(--blue);font-weight:900">Monte a frase</small><div style="font-size:18px;margin-top:6px">${esc(ex.pt)}</div></div>
+  return `<div class="card" style="text-align:left"><small style="color:var(--blue);font-weight:900">Monte a frase em inglês</small><div style="font-size:18px;margin-top:6px">${esc(ex.pt)}</div></div>
   <div style="display:flex;flex-wrap:wrap;gap:8px;min-height:56px;margin-top:18px;padding-bottom:12px;border-bottom:2px dashed var(--line)">${picked.map((i,j)=>`<button class="tab" ${C.fb?"disabled":""} onclick="orderUndo(${j})">${esc(ex.words[i])}</button>`).join("")}</div>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">${ex.words.map((w,i)=>picked.includes(i)?"":`<button class="tab" ${C.fb?"disabled":""} onclick="orderPick(${i})">${esc(w)}</button>`).join("")}</div>`;
 }
@@ -287,6 +305,12 @@ function privacyView(){
   <p class="intro">Você pode apagar sua conta no perfil, em "Apagar minha conta". Para outras dúvidas, escreva para dogglot.app@outlook.com.</p></main>`;
 }
 function showPrivacy(){ PRIVACY=true; render(); }
+const tk=(s)=>norm(s).replace(/[¿¡]/g,"");
+function bottomNav(){
+  const m=S.mode||"path";
+  const items=[["path","Lições","📘"],["stories","Histórias","📖"],["dict","Dicionário","🔤"],["profile","Perfil","👤"]];
+  return `<nav class="bnav">${items.map(([k,l,i])=>`<button class="${m===k?"on":""}" onclick="setMode('${k}')"><span style="font-size:20px;display:block">${i}</span>${l}</button>`).join("")}</nav>`;
+}
 function setTheme(t){ S.theme=t; save(); render(); }
 function applyTheme(){ const t=S.theme; if(t&&t!=="auto") document.documentElement.setAttribute("data-theme",t); else document.documentElement.removeAttribute("data-theme"); }
 function themeRow(){
@@ -647,8 +671,8 @@ async function chatSend(){
 function shell(){
   const m=S.mode||"path";
   const tabs=Object.entries(BANKS).map(([k,b])=>`<button class="tab ${S.lang===k?"on":""}" onclick="setLang('${k}')">${b.flag} ${b.name}</button>`).join("");
-  const modes=[["path","Lições"],["stories","Histórias"],["chat","Conversa com IA"],["dict","Dicionário"],["profile","Perfil"]].map(([k,l])=>`<button class="tab ${m===k?"on":""}" onclick="setMode('${k}')">${l}</button>`).join("");
-  return `<header>${logoSVG(34)}${tabs}<div class="stats"><span>🔥 ${S.streak}</span><span>⚡ ${S.xp}</span><span>❤️ ${S.hearts>=999?"∞":S.hearts}</span><button onclick="toggleMute()" aria-label="Som" style="font-size:18px">${S.mute?"🔇":"🔊"}</button></div><div class="modes">${modes}</div></header>`;
+  const modes=[["path","Lições"],["stories","Histórias"],["dict","Dicionário"],["profile","Perfil"]].map(([k,l])=>`<button class="tab ${m===k?"on":""}" onclick="setMode('${k}')">${l}</button>`).join("");
+  return `<header>${logoSVG(34)}${tabs}<div class="stats"><span>🔥 ${S.streak}</span><span>⚡ ${S.xp}</span><span>❤️ ${S.hearts>=999?"∞":S.hearts}</span><button onclick="toggleMute()" aria-label="Som" style="font-size:18px">${S.mute?"🔇":"🔊"}</button></div></header>`;
 }
 
 let ME=null, AUTH_READY=false, ADMIN=null, syncT=null, AUTH_MSG="", RESET_TOKEN=null, RANK=null;
@@ -777,7 +801,7 @@ function render(){ refillHearts(); applyTheme();
              : m==="chat" ? chatView()
              : m==="admin" ? adminView() : m==="profile" ? profileView() : m==="dict" ? dictView()
              : `<main>${path()}</main>`;
-  app.innerHTML = shell() + body;
+  app.innerHTML = shell() + body + (S.welcomed&&S.goal!==undefined&&S.lvEs!==undefined ? bottomNav() : "");
 }
 render();
 </script>
